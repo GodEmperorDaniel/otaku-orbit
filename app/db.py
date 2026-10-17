@@ -84,7 +84,18 @@ def conn():
 
 
 def init():
-    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    folder = Path(DB_PATH).parent
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        pass
+    if not os.access(folder, os.W_OK | os.X_OK):
+        # Usually a bind mount the container's user doesn't own (Docker creates missing ones as root).
+        raise SystemExit(
+            f"Can't write to {folder} as uid {os.getuid()}. On the host, run "
+            f"`chown -R {os.getuid()}:{os.getgid()} <your data folder>`, or set `user:` in the compose "
+            f"file to the uid:gid that owns it."
+        )
     with conn() as c:
         c.execute("PRAGMA journal_mode = WAL")
         c.executescript(SCHEMA)
