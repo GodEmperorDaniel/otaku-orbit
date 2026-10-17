@@ -50,7 +50,7 @@
       value="{{ entry.episodes_watched if entry else 0 }}"> / {{ a.episodes or '?' }}</span>
   </label>
   <label>Score
-    <input type="number" name="score" min="1" max="10" step="0.5" placeholder="1–10"
+    <input type="number" name="score" min="1" max="10" step="0.1" placeholder="1–10"
       value="{{ entry.score|score if entry and entry.score is not none else '' }}">
   </label>
   <label class="wide">Notes
