@@ -8,7 +8,7 @@ It's also where streaming links come from: MAL's API doesn't provide them.
 import html
 import re
 
-from .base import SFW, Client, NotFound, link, record
+from .base import SFW, Client, NotFound, link, record, relation
 
 NAME = "anilist"
 LABEL = "AniList"
@@ -29,6 +29,10 @@ MEDIA = """
     studios(isMain: true) { nodes { name } }
 """
 LINKS = "externalLinks { site url type language color icon notes isDisabled }"
+RELATIONS = "relations { edges { relationType node { idMal type title { romaji english } coverImage { large } } } }"
+RELATION_TYPES = {"PREQUEL": "prequel", "SEQUEL": "sequel", "PARENT": "parent_story", "SIDE_STORY": "side_story",
+                  "SPIN_OFF": "spin_off", "ALTERNATIVE": "alternative_version", "SUMMARY": "summary",
+                  "COMPILATION": "summary", "CONTAINS": "full_story", "CHARACTER": "character", "OTHER": "other"}
 
 _client = Client(LABEL, "https://graphql.anilist.co", 1.0)
 
@@ -93,6 +97,14 @@ def normalize(m):
     )
     if "externalLinks" in m:
         a["links"] = _links(m)
+    if "relations" in m:
+        a["relations"] = [
+            relation(e["node"]["idMal"], (e["node"].get("title") or {}).get("romaji"),
+                     (e["node"].get("coverImage") or {}).get("large"), RELATION_TYPES[e["relationType"]])
+            for e in (m["relations"] or {}).get("edges") or []
+            # Manga adaptations and shows MAL doesn't have can't be linked to.
+            if e["node"].get("type") == "ANIME" and e["node"].get("idMal") and e.get("relationType") in RELATION_TYPES
+        ]
     return a
 
 
@@ -120,7 +132,7 @@ def ranking(kind):
 
 
 def get(mal_id):
-    data = _query(f"query ($id: Int) {{ Media(idMal: $id, type: ANIME) {{ {MEDIA} {LINKS} }} }}", id=mal_id)
+    data = _query(f"query ($id: Int) {{ Media(idMal: $id, type: ANIME) {{ {MEDIA} {LINKS} {RELATIONS} }} }}", id=mal_id)
     if not data.get("Media"):
         raise NotFound(f"{LABEL}: not found")
     return normalize(data["Media"])

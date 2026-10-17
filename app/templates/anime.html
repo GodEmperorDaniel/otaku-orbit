@@ -14,6 +14,13 @@
     </p>
     <p>{% for g in a.genres|genres %}<span class="tag">{{ g }}</span>{% endfor %}</p>
 
+    {% if related.prev or related.next %}
+      <nav class="series-nav">
+        {% for r in related.prev %}<a class="btn ghost small" href="/anime/{{ r.mal_id }}" title="Prequel: {{ r.title }}">← <span>{{ r.title }}</span></a>{% endfor %}
+        {% for r in related.next %}<a class="btn ghost small" href="/anime/{{ r.mal_id }}" title="Sequel: {{ r.title }}"><span>{{ r.title }}</span> →</a>{% endfor %}
+      </nav>
+    {% endif %}
+
     <h3>Where to watch</h3>
     {{ m.streaming(a.links, "No streaming platforms listed for this one." if a.links_at else "Streaming info couldn't be loaded right now.") }}
     {% if a.links and a.links != '[]' %}<p class="muted small">From AniList; availability varies by region.</p>{% endif %}
@@ -67,6 +74,34 @@
     {% if user %}{{ m.pick_form(a, defaults) }}{% else %}<p class="muted">Log in to schedule picks.</p>{% endif %}
   </section>
 </div>
+
+{% macro rel_card(r, current=false) -%}
+{% if current %}<div class="mini-card current">{% else %}<a class="mini-card" href="/anime/{{ r.mal_id }}">{% endif %}
+  {{ m.poster(r) }}
+  <div>
+    <b>{{ r.title }}</b>
+    <span class="muted small">{% if r.loading %}Loading details…{% else %}{{ r.type or '' }}{% if r.year %} · {{ (r.season or '')|capitalize }} {{ r.year }}{% endif %}{% endif %}</span>
+    {% if current %}<span class="tag on">You're here</span>
+    {% elif r.entry %}<span class="tag on">{{ STATUSES[r.entry.status] }}{% if r.entry.score is not none %} · {{ r.entry.score|score }}{% endif %}</span>{% endif %}
+  </div>
+{% if current %}</div>{% else %}</a>{% endif %}
+{%- endmacro %}
+
+{% if related.order or related.groups %}
+<section class="card related">
+  {% if related.order %}
+    <h2>Watch order</h2>
+    <ol class="row-cards watch-order">
+      {% for r in related.order %}<li>{{ rel_card(r, r.mal_id == a.mal_id) }}</li>{% endfor %}
+    </ol>
+    {% if related.order|selectattr('loading')|list %}<p class="muted small">Some entries are still being fetched; reload in a minute to see the rest.</p>{% endif %}
+  {% endif %}
+  {% for label, items in related.groups %}
+    <h3>{{ label }}</h3>
+    <div class="rel-grid">{% for r in items %}{{ rel_card(r) }}{% endfor %}</div>
+  {% endfor %}
+</section>
+{% endif %}
 
 {% if a.synopsis %}
 <section class="card synopsis">

@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS anime (
     source        TEXT,
     fetched_at    TEXT,
     links         TEXT,
-    links_at      TEXT
+    links_at      TEXT,
+    relations     TEXT
 );
 CREATE TABLE IF NOT EXISTS entries (
     user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -104,7 +105,7 @@ def init():
         if "source" not in cols:
             c.execute("ALTER TABLE anime ADD COLUMN source TEXT")
             c.execute("UPDATE anime SET source = 'jikan' WHERE fetched_at IS NOT NULL")
-        for col in ("links", "links_at"):
+        for col in ("links", "links_at", "relations"):
             if col not in cols:
                 c.execute(f"ALTER TABLE anime ADD COLUMN {col} TEXT")
 
@@ -148,6 +149,21 @@ def users(c):
 def set_links(c, mal_id, links):
     """Streaming platforms for a show: a JSON list of {site, url, color, icon, note}."""
     c.execute("UPDATE anime SET links = ?, links_at = datetime('now') WHERE mal_id = ?", (json.dumps(links), mal_id))
+
+
+def set_relations(c, mal_id, relations):
+    """Related shows as a JSON list of {mal_id, title, image_url, relation}.
+
+    Prequels and sequels we haven't seen get a stub row, so the background refresher fetches them, and
+    then their prequels and sequels: that's how a franchise's watch order fills in. Returns how many
+    stubs were added."""
+    c.execute("UPDATE anime SET relations = ? WHERE mal_id = ?", (json.dumps(relations), mal_id))
+    added = 0
+    for r in relations:
+        if r["relation"] in ("prequel", "sequel"):
+            added += c.execute("INSERT OR IGNORE INTO anime (mal_id, title, image_url) VALUES (?, ?, ?)",
+                               (r["mal_id"], r["title"] or f"#{r['mal_id']}", r["image_url"])).rowcount
+    return added
 
 
 def upsert_anime(c, a):

@@ -2,9 +2,10 @@
 
 A small self-hosted anime tracker for a group of friends, similar to MyAnimeList or Kitsu but running on your own server.
 
-- **Personal lists**: watching, completed, on hold, dropped and plan to watch, with episode progress, 1–10 scores (half points allowed) and notes.
+- **Personal lists**: watching, completed, on hold, dropped and plan to watch, with episode progress, 1–10 scores (to one decimal place) and notes.
 - **Metadata from MyAnimeList's official API**: titles, posters, genres, studios and MAL scores. If MAL is unreachable, the app falls back to [AniList](https://anilist.co) automatically. Data is cached in SQLite and refreshed weekly.
 - **Browse and search with filters**: browse any season, top rated, most popular, airing now or upcoming. Filter by type, genres, airing status, minimum MAL score and year range, hide shows already on your list, and sort by popularity, score, date or title.
+- **Seasons and related shows**: each show's page has buttons for the previous and next season, the franchise's full watch order (filled in from prequel and sequel links), and its side stories, spin-offs, movies and other related entries.
 - **Where to watch**: each show's page links to its streaming platforms (Crunchyroll, Netflix and so on), and so does the club's current pick on the home page.
 - **Club picks**: schedule what the club watches together, by default every two weeks. The home page shows the current pick with everyone's progress and scores, what's up next, and a scoreboard of past picks.
 - **Taste comparison**: an agreement matrix (average score gap and correlation for each pair of members), each member's lean against MAL and against the club, the most divisive picks and the ones everyone agreed on, genre leanings, and head-to-head pages with recommendations ("Bob rated these 8+ and you haven't seen them").

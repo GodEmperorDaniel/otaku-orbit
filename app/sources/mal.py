@@ -6,7 +6,7 @@ Public data only needs a client ID, sent as the X-MAL-CLIENT-ID header.
 import os
 import re
 
-from .base import SFW, Client, SourceError, record
+from .base import SFW, Client, SourceError, record, relation
 
 NAME = "mal"
 LABEL = "MyAnimeList"
@@ -86,7 +86,16 @@ def ranking(kind):
 
 
 def get(mal_id):
-    return normalize(_client.request("GET", f"/anime/{mal_id}", params=_params()))
+    params = _params()
+    params["fields"] += ",related_anime"  # only the details endpoint has it
+    n = _client.request("GET", f"/anime/{mal_id}", params=params)
+    a = normalize(n)
+    a["relations"] = [
+        relation(r["node"]["id"], r["node"].get("title"), (r["node"].get("main_picture") or {}).get("medium"),
+                 r.get("relation_type"))
+        for r in n.get("related_anime") or []
+    ]
+    return a
 
 
 def health():

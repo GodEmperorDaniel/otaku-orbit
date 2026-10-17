@@ -2,7 +2,8 @@
 
 Every provider module exposes NAME, LABEL, enabled(), search(q), season(year, season), ranking(kind),
 get(mal_id) and health(); providers that know streaming platforms also expose streaming(mal_id).
-Anime are returned as dicts shaped like `record()` below, keyed by MyAnimeList ID.
+Anime are returned as dicts shaped like `record()` below, keyed by MyAnimeList ID. get() also adds
+"relations": a list of `relation()` dicts for related shows.
 """
 
 import datetime as dt
@@ -42,6 +43,26 @@ def record(**fields):
 
 
 RANKINGS = ("top", "popular", "airing", "upcoming")
+
+# MAL's relation types, in the order the anime page shows them.
+RELATIONS = {
+    "prequel": "Prequel",
+    "sequel": "Sequel",
+    "parent_story": "Parent story",
+    "side_story": "Side story",
+    "spin_off": "Spin-off",
+    "alternative_setting": "Alternative setting",
+    "alternative_version": "Alternative version",
+    "summary": "Summary",
+    "full_story": "Full story",
+    "character": "Shares characters",
+    "other": "Other",
+}
+
+
+def relation(mal_id, title, image_url, kind):
+    return {"mal_id": mal_id, "title": title, "image_url": image_url,
+            "relation": kind if kind in RELATIONS else "other"}
 
 
 def link(site, url, color=None, icon=None, note=None):

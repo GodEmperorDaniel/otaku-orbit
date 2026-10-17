@@ -12,7 +12,7 @@ import time
 
 from .. import db
 from . import anilist, jikan, mal
-from .base import RANKINGS, NotFound, SourceError, current_season
+from .base import RANKINGS, RELATIONS, NotFound, SourceError, current_season
 
 log = logging.getLogger("animeclub.sources")
 
@@ -20,7 +20,7 @@ PROVIDERS = {p.NAME: p for p in (mal, anilist, jikan)}
 LABELS = {p.NAME: p.LABEL for p in PROVIDERS.values()}
 REFRESH_DAYS = int(os.environ.get("REFRESH_DAYS", "7"))
 
-__all__ = ["NotFound", "SourceError", "LABELS", "RANKINGS", "current_season", "active", "browse",
+__all__ = ["NotFound", "SourceError", "LABELS", "RANKINGS", "RELATIONS", "current_season", "active", "browse",
            "fetch_and_store", "ensure_links", "start_refresher", "wake_refresher", "status"]
 
 
@@ -67,11 +67,16 @@ def _first(op, *args, providers=None):
 
 
 def _store(items):
+    stubs = 0
     with db.conn() as c:
         for a in items:
             db.upsert_anime(c, a)
             if "links" in a:
                 db.set_links(c, a["mal_id"], a["links"])
+            if "relations" in a:
+                stubs += db.set_relations(c, a["mal_id"], a["relations"])
+    if stubs:
+        wake_refresher()
     return items
 
 

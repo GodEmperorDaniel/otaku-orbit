@@ -2,7 +2,7 @@
 
 import os
 
-from .base import SFW, Client, link, record
+from .base import SFW, Client, link, record, relation
 
 NAME = "jikan"
 LABEL = "Jikan"
@@ -73,7 +73,13 @@ def ranking(kind):
 
 
 def get(mal_id):
-    return normalize(_client.request("GET", f"/anime/{mal_id}")["data"])
+    d = _client.request("GET", f"/anime/{mal_id}/full")["data"]
+    a = normalize(d)
+    a["relations"] = [
+        relation(e["mal_id"], e.get("name"), None, (r.get("relation") or "").lower().replace(" ", "_").replace("-", "_"))
+        for r in d.get("relations") or [] for e in r.get("entry") or [] if e.get("type") == "anime"
+    ]
+    return a
 
 
 def streaming(mal_id):

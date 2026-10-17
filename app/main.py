@@ -278,11 +278,13 @@ def anime_page(request: Request, mal_id: int):
     user = viewer(request)
     with db.conn() as c:
         a = c.execute("SELECT * FROM anime WHERE mal_id = ?", (mal_id,)).fetchone()
-    if a is None or a["fetched_at"] is None:
+    # Rows saved before related shows were tracked get them on their first visit.
+    if a is None or a["fetched_at"] is None or a["relations"] is None:
         try:
             sources.fetch_and_store(mal_id)
         except sources.NotFound:
-            raise HTTPException(404, "That anime doesn't exist on MyAnimeList.")
+            if a is None or a["fetched_at"] is None:
+                raise HTTPException(404, "That anime doesn't exist on MyAnimeList.")
         except sources.SourceError as e:
             if a is None:
                 raise HTTPException(502, f"Couldn't fetch metadata: {e}")
@@ -295,7 +297,75 @@ def anime_page(request: Request, mal_id: int):
         view = score_view(c, mal_id, a["mal_score"], users, user)
         picks = c.execute(PICK_SQL + " WHERE p.mal_id = ? ORDER BY p.start_date DESC", (mal_id,)).fetchall()
         defaults = next_pick_dates(c)
-    return render(request, "anime.html", user, a=a, view=view, picks=picks, defaults=defaults)
+        related = related_view(c, a, user)
+    return render(request, "anime.html", user, a=a, view=view, picks=picks, defaults=defaults, related=related)
+
+
+SEASON_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3}
+
+
+def related_view(c, a, me):
+    """Prequels/sequels as a watch order, plus other related shows grouped by relation."""
+    rows = {a["mal_id"]: a}
+
+    def load(ids):
+        ids = [i for i in ids if i not in rows]
+        if ids:
+            q = f"SELECT * FROM anime WHERE mal_id IN ({','.join('?' * len(ids))})"
+            rows.update((r["mal_id"], r) for r in c.execute(q, ids))
+
+    def rels(row):
+        return json.loads(row["relations"] or "[]") if row else []
+
+    direct = rels(a)
+    load(r["mal_id"] for r in direct)
+
+    # Walk prequel/sequel links through what's stored. Branches (a movie between two seasons, say) all
+    # end up in the order, sorted by when they aired; the refresher fills in shows we haven't fetched yet.
+    chain, frontier = {a["mal_id"]}, [a["mal_id"]]
+    while frontier and len(chain) < 40:
+        load(r["mal_id"] for i in frontier for r in rels(rows.get(i)))
+        nxt = []
+        for i in frontier:
+            for r in rels(rows.get(i)):
+                if r["relation"] in ("prequel", "sequel") and r["mal_id"] not in chain and r["mal_id"] in rows:
+                    chain.add(r["mal_id"])
+                    nxt.append(r["mal_id"])
+        frontier = nxt
+
+    mine = {}
+    if me:
+        ids = list(rows)
+        mine = {e["mal_id"]: e for e in c.execute(
+            f"SELECT mal_id, status, score FROM entries WHERE user_id = ? AND mal_id IN ({','.join('?' * len(ids))})",
+            [me["id"], *ids])}
+
+    def item(mal_id, fallback=None):
+        row = rows.get(mal_id)
+        src = row or fallback
+        return {
+            "mal_id": mal_id,
+            "title": title_of(row) if row else (src["title"] or f"#{mal_id}"),
+            "image_url": src["image_url"],
+            "type": row["type"] if row else None,
+            "year": row["year"] if row else None,
+            "season": row["season"] if row else None,
+            "loading": row is not None and row["fetched_at"] is None,  # a stub the refresher will fill in
+            "entry": mine.get(mal_id),
+        }
+
+    order = sorted((item(i) for i in chain),
+                   key=lambda r: (r["year"] is None, r["year"] or 0, SEASON_ORDER.get(r["season"], 4), r["mal_id"]))
+    groups = {}
+    for r in direct:
+        if r["relation"] not in ("prequel", "sequel"):
+            groups.setdefault(r["relation"], []).append(item(r["mal_id"], r))
+    return {
+        "prev": [item(r["mal_id"], r) for r in direct if r["relation"] == "prequel"],
+        "next": [item(r["mal_id"], r) for r in direct if r["relation"] == "sequel"],
+        "order": order if len(order) > 1 else [],
+        "groups": [(label, groups[k]) for k, label in sources.RELATIONS.items() if k in groups],
+    }
 
 
 @app.post("/anime/{mal_id}/entry")

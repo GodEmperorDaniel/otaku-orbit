@@ -212,6 +212,21 @@ form.inline { display: inline; }
 .mini-card div { display: flex; flex-direction: column; }
 .mini-card:hover { text-decoration: none; border-color: var(--accent); }
 
+/* --- related shows --- */
+.series-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.series-nav .btn { max-width: 100%; display: inline-flex; gap: 6px; }
+.series-nav .btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+.related h3 { margin: 16px 0 8px; }
+.watch-order { list-style: none; padding: 0; margin: 0; counter-reset: order; }
+.watch-order li { counter-increment: order; flex: 0 0 auto; }
+.watch-order .mini-card { width: 260px; margin: 0; }
+.watch-order .mini-card b::before { content: counter(order) ". "; color: var(--muted); }
+.mini-card.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.mini-card b { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mini-card .tag { align-self: flex-start; margin-top: 4px; }
+.rel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.rel-grid .mini-card { min-width: 0; margin: 0; }
+
 /* --- tables --- */
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 table { width: 100%; border-collapse: collapse; }
