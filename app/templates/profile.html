@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}{{ owner.display_name }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<section class="profile-head">
+  <span class="avatar xl" style="--c: {{ owner.color }}">{{ owner.display_name[:1]|upper }}</span>
+  <div>
+    <h1>{{ owner.display_name }}</h1>
+    <p class="muted">@{{ owner.username }} · {{ total }} on list · {{ n_scored }} scored
+      {% if user and user.id != owner.id %} · <a href="/compare/{{ user.username }}/{{ owner.username }}">Compare with me →</a>{% endif %}</p>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><span>Mean score</span><b>{{ mean|num(2) }}</b></div>
+    <div class="stat"><span>vs MyAnimeList</span><b>{{ vs_mal|signed(2) }}</b>
+      <small>{% if vs_mal is none %}&nbsp;{% elif vs_mal > 0.3 %}generous{% elif vs_mal < -0.3 %}harsh{% else %}in line{% endif %}</small></div>
+  </div>
+</section>
+
+{% if n_scored %}
+<section class="card">
+  <h2>Score distribution</h2>
+  <div class="dist" style="--c: {{ owner.color }}">
+    {% for count in dist %}
+      <div class="dist-col" title="{{ count }} × {{ loop.index }}">
+        <span class="dist-n">{{ count or '' }}</span>
+        <i style="height: {{ (count / dist_max * 100)|round }}%"></i>
+        <span class="dist-label">{{ loop.index }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<nav class="tabs">
+  <a href="?status=all&sort={{ sort }}" class="{{ 'on' if status == 'all' }}">All <small>{{ total }}</small></a>
+  {% for k, v in STATUSES.items() %}
+    <a href="?status={{ k }}&sort={{ sort }}" class="{{ 'on' if status == k }}">{{ v }} <small>{{ counts[k] }}</small></a>
+  {% endfor %}
+  <span class="spacer"></span>
+  <span class="muted">Sort:</span>
+  {% for k, v in [('score', 'Score'), ('title', 'Title'), ('updated', 'Recent'), ('mal', 'MAL')] %}
+    <a href="?status={{ status }}&sort={{ k }}" class="{{ 'on' if sort == k }}">{{ v }}</a>
+  {% endfor %}
+</nav>
+
+{% if rows %}
+<div class="table-wrap">
+  <table class="list">
+    <thead><tr><th>Anime</th><th>Status</th><th class="num">Progress</th><th class="num">Score</th><th class="num">MAL</th><th class="num">Δ</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          <td class="title-cell"><a href="/anime/{{ r.mal_id }}">{{ m.poster(r, "thumb") }}<span>{{ title_of(r) }}
+            <small>{{ r.type or '' }}{% if r.year %} · {{ r.year }}{% endif %}</small>
+            {% if r.notes %}<small class="quote">“{{ r.notes }}”</small>{% endif %}</span></a></td>
+          <td><span class="status s-{{ r.status }}">{{ STATUSES[r.status] }}</span></td>
+          <td class="num muted">{{ r.episodes_watched }}/{{ r.episodes or '?' }}</td>
+          <td class="num"><b>{{ r.score|score }}</b></td>
+          <td class="num muted">{{ r.mal_score|num(2) }}</td>
+          {% set d = (r.score - r.mal_score) if r.score is not none and r.mal_score else none %}
+          <td class="num"><span class="score-pill" style="{{ tint(d) }}">{{ d|signed }}</span></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <p class="muted">Nothing here yet.{% if user and user.id == owner.id %} <a href="/search">Find something</a> or <a href="/import">import your MyAnimeList</a>.{% endif %}</p>
+{% endif %}
+{% endblock %}

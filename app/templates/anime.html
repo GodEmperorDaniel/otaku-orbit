@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}{{ title_of(a) }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<section class="hero">
+  {{ m.poster(a, "big") }}
+  <div class="hero-body">
+    <h1>{{ title_of(a) }}</h1>
+    {% if a.title_english and a.title_english != a.title %}<p class="muted">{{ a.title }}</p>{% endif %}
+    <p class="meta">
+      {{ a.type or '' }}{% if a.year %} · {{ (a.season or '')|capitalize }} {{ a.year }}{% endif %}
+      {% if a.episodes %} · {{ a.episodes }} eps{% endif %}{% if a.status %} · {{ a.status }}{% endif %}
+      {% for s in a.studios|genres %} · {{ s }}{% endfor %}
+    </p>
+    <p>{% for g in a.genres|genres %}<span class="tag">{{ g }}</span>{% endfor %}</p>
+
+    <h3>Where to watch</h3>
+    {{ m.streaming(a.links, "No streaming platforms listed for this one." if a.links_at else "Streaming info couldn't be loaded right now.") }}
+    {% if a.links and a.links != '[]' %}<p class="muted small">From AniList; availability varies by region.</p>{% endif %}
+
+    <div class="stat-row">
+      <div class="stat"><span>MyAnimeList</span><b>{{ a.mal_score|num(2) }}</b>
+        <small>{% if a.mal_rank %}#{{ a.mal_rank }} · {% endif %}{{ '{:,}'.format(a.mal_scored_by) if a.mal_scored_by else '' }} votes</small></div>
+      <div class="stat"><span>Club avg</span><b>{{ view.mean|num }}</b><small>{{ view.n }} scored</small></div>
+      <div class="stat"><span>Spread</span><b>{{ view.sd|num }}</b><small>std. dev.</small></div>
+    </div>
+
+    {% if view.n %}{{ m.strip(view.dots, view.rows, view.mean, a.mal_score) }}{% endif %}
+
+    {% if user %}
+      <h3>My entry</h3>
+      {{ m.entry_form(a, view.mine, '/anime/' ~ a.mal_id) }}
+    {% endif %}
+  </div>
+</section>
+
+<div class="two-col">
+  <section class="card">
+    <h2>The club on this one</h2>
+    <ul class="progress-list">
+      {% for mem in view.members %}
+        {% set e = mem.entry %}
+        <li>
+          {{ m.member(mem.user) }}
+          <span class="muted">{{ STATUSES[e.status] if e else 'Not on list' }}{% if e and e.status != 'completed' and e.episodes_watched %} · ep {{ e.episodes_watched }}{% endif %}</span>
+          <b class="score-pill" style="{{ tint(mem.delta) }}">{{ e.score|score if e else '–' }}</b>
+        </li>
+        {% if e and e.notes %}<li class="quote">“{{ e.notes }}”</li>{% endif %}
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Club pick</h2>
+    {% if picks %}
+      <ul class="plain">
+        {% for p in picks %}
+          <li>{{ p.start_date }} → {{ p.end_date }}{% if p.picker_name %} · picked by {{ p.picker_name }}{% endif %}
+            {% if user and (user.is_admin or user.id == p.picked_by) %}
+              <form method="post" action="/picks/{{ p.id }}/delete" class="inline" onsubmit="return confirm('Remove this pick?')">
+                <button class="linklike danger">remove</button></form>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if user %}{{ m.pick_form(a, defaults) }}{% else %}<p class="muted">Log in to schedule picks.</p>{% endif %}
+  </section>
+</div>
+
+{% if a.synopsis %}
+<section class="card synopsis">
+  <h2>Synopsis</h2>
+  <p>{{ a.synopsis }}</p>
+</section>
+{% endif %}
+
+<p class="muted small">
+  {% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">View on MyAnimeList</a> · {% endif %}
+  Metadata fetched {{ a.fetched_at or 'never' }} UTC{% if a.source %} from {{ SOURCE_LABELS.get(a.source, a.source) }}{% endif %}
+  {% if a.source == 'anilist' %}(MAL score will fill in once MyAnimeList is reachable){% endif %}
+  {% if user %}<form method="post" action="/anime/{{ a.mal_id }}/refresh" class="inline"><button class="linklike">refresh</button></form>{% endif %}
+</p>
+{% endblock %}

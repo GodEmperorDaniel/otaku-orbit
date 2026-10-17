@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}{{ f.q or modes[f.mode] }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<nav class="tabs">
+  {% if f.q %}<a class="on" href="?{{ f.query() }}">Results for “{{ f.q }}”</a>{% endif %}
+  {% for k, v in modes.items() %}
+    <a href="?{{ f.query(q=None, mode=k, year=None, season=None) }}" class="{{ 'on' if not f.q and f.mode == k }}">{{ v }}</a>
+  {% endfor %}
+</nav>
+
+{# Selects submit with requestSubmit() so the onsubmit handler can record whether the panel was open. #}
+<form class="browse-form" method="get" action="/search"
+      onsubmit="const o = this.elements.open; o.value = this.querySelector('details.filter-panel').open ? '1' : ''; o.disabled = !o.value">
+  <input type="hidden" name="open" value="">
+  <div class="toolbar">
+    {% if f.q %}
+      <label>Search <input name="q" value="{{ f.q }}"></label>
+    {% else %}
+      <input type="hidden" name="mode" value="{{ f.mode }}">
+      {% if f.mode == 'season' %}
+        <label>Season
+          <span class="pair">
+            <select name="season" onchange="this.form.requestSubmit()">
+              <option value="any" {% if f.season == 'any' %}selected{% endif %}>Whole year</option>
+              {% for s in seasons %}<option value="{{ s }}" {% if s == f.season %}selected{% endif %}>{{ s|capitalize }}</option>{% endfor %}
+            </select>
+            <select name="year" onchange="this.form.requestSubmit()">
+              {% for y in years %}<option {% if y == f.year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select>
+          </span>
+        </label>
+      {% endif %}
+    {% endif %}
+    <label>Sort
+      <select name="sort" onchange="this.form.requestSubmit()">
+        {% for k, v in sorts.items() %}<option value="{{ k }}" {% if f.sort == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <details class="filter-panel" {% if f.open %}open{% endif %}>
+    <summary class="btn ghost small">Filters{% if f.active_count %} <span class="count">{{ f.active_count }}</span>{% endif %}</summary>
+    <div class="filters card">
+      <label>Status
+        <select name="status" onchange="this.form.requestSubmit()">
+          <option value="">Any</option>
+          {% for k, v in statuses.items() %}<option value="{{ k }}" {% if f.status == k %}selected{% endif %}>{{ v[0] }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Min. MAL score
+        <input type="number" name="min_score" min="1" max="10" step="0.5" value="{{ f.min_score if f.min_score is not none else '' }}" placeholder="Any">
+      </label>
+      {% if f.q or f.mode != 'season' %}
+        <label>Years
+          <span class="pair">
+            <input type="number" name="year_from" min="1917" max="2100" value="{{ f.year_from or '' }}" placeholder="from">
+            <input type="number" name="year_to" min="1917" max="2100" value="{{ f.year_to or '' }}" placeholder="to">
+          </span>
+        </label>
+      {% endif %}
+      <div class="checks">
+        {% if user %}<label class="check"><input type="checkbox" name="hide_mine" value="1" {% if f.hide_mine %}checked{% endif %} onchange="this.form.requestSubmit()"> Hide shows on my list</label>{% endif %}
+        {% if not f.q and f.mode == 'season' %}<label class="check"><input type="checkbox" name="continuing" value="1" {% if f.continuing %}checked{% endif %} onchange="this.form.requestSubmit()"> Include shows continuing from earlier {{ 'years' if f.season == 'any' else 'seasons' }}</label>{% endif %}
+      </div>
+
+      {% set type_counts = dict(facets.types) %}
+      <fieldset class="chips">
+        <legend>Type</legend>
+        {% for t in (facets.types|map('first')|list + f.types)|unique %}
+          <label class="chip-check"><input type="checkbox" name="type" value="{{ t }}" {% if t in f.types %}checked{% endif %} onchange="this.form.requestSubmit()">
+            <span>{{ t }} <small>{{ type_counts.get(t, 0) }}</small></span></label>
+        {% endfor %}
+      </fieldset>
+
+      {% set genre_counts = dict(facets.genres) %}
+      <fieldset class="chips">
+        <legend>Genres <span class="muted">· ticking several shows titles with all of them</span></legend>
+        <div class="chip-scroll">
+        {% for g in (f.genres + facets.genres|map('first')|list)|unique %}
+          <label class="chip-check"><input type="checkbox" name="genre" value="{{ g }}" {% if g in f.genres %}checked{% endif %} onchange="this.form.requestSubmit()">
+            <span>{{ g }} <small>{{ genre_counts.get(g, 0) }}</small></span></label>
+        {% endfor %}
+        </div>
+      </fieldset>
+
+      <div class="filter-actions">
+        <button class="btn small">Apply</button>
+      </div>
+    </div>
+  </details>
+</form>
+
+{% if f.active_count %}
+  {# Active filters stay visible (and removable) while the panel is closed. #}
+  <div class="active-filters">
+    {% for t in f.types %}<a class="pill" href="?{{ f.query(type=f.types|reject('equalto', t)|list) }}">{{ t }} ×</a>{% endfor %}
+    {% for g in f.genres %}<a class="pill" href="?{{ f.query(genre=f.genres|reject('equalto', g)|list) }}">{{ g }} ×</a>{% endfor %}
+    {% if f.status %}<a class="pill" href="?{{ f.query(status=None) }}">{{ statuses[f.status][0] }} ×</a>{% endif %}
+    {% if f.min_score is not none %}<a class="pill" href="?{{ f.query(min_score=None) }}">MAL ≥ {{ f.min_score|score }} ×</a>{% endif %}
+    {% if f.year_from or f.year_to %}<a class="pill" href="?{{ f.query(year_from=None, year_to=None) }}">{{ f.year_from or '…' }}–{{ f.year_to or '…' }} ×</a>{% endif %}
+    {% if f.hide_mine %}<a class="pill" href="?{{ f.query(hide_mine=None) }}">Not on my list ×</a>{% endif %}
+    <a href="?{{ f.query(type=[], genre=[], status=None, min_score=None, year_from=None, year_to=None, hide_mine=None) }}">Clear all</a>
+  </div>
+{% endif %}
+
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<p class="muted small">
+  {% if not error %}Showing {{ results|length }} of {{ total }}
+    {%- if total != candidates %} (filtered from {{ candidates }}){% endif %}.{% endif %}
+  {% if f.mode in ('top', 'popular', 'airing', 'upcoming') and not f.q %}Filters apply to the top {{ candidates }} of this list.{% endif %}
+</p>
+{% if not results and not error %}<p class="muted">Nothing matches these filters.</p>{% endif %}
+
+<div class="grid">
+  {% for a in results %}
+    {% set mine_e = mine.get(a.mal_id) %}
+    <a class="card anime-card" href="/anime/{{ a.mal_id }}" {% if loop.index0 == (f.page - 1) * per_page %}id="more"{% endif %}>
+      {{ m.poster(a) }}
+      <div class="anime-card-body">
+        <b>{{ title_of(a) }}</b>
+        <span class="muted">{{ a.type or '' }}{% if a.year %} · {% if f.season == 'any' and a.season %}{{ a.season|capitalize }} {% endif %}{{ a.year }}{% endif %}{% if a.episodes %} · {{ a.episodes }} eps{% endif %}</span>
+        <span class="row">
+          <span class="mal-badge" title="MyAnimeList score">★ {{ a.mal_score|num(2) }}</span>
+          {% if mine_e %}<span class="tag on">{{ STATUSES[mine_e.status] }}{% if mine_e.score is not none %} · {{ mine_e.score|score }}{% endif %}</span>{% endif %}
+        </span>
+      </div>
+    </a>
+  {% endfor %}
+</div>
+{% if results|length < total %}
+  <p class="more"><a class="btn ghost" href="?{{ f.query(page=f.page + 1) }}#more">Show more ({{ total - results|length }} left)</a></p>
+{% endif %}
+{% endblock %}

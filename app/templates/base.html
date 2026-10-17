@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
+  <link rel="icon" href="/static/icon.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><img src="/static/icon.svg" alt="">{{ SITE_NAME }}</a>
+  <nav>
+    <a href="/">Club</a>
+    <a href="/compare">Tastes</a>
+    <a href="/search">Browse</a>
+    {% if user %}<a href="/u/{{ user.username }}">My list</a>{% endif %}
+  </nav>
+  <form class="search" action="/search" role="search">
+    <input name="q" placeholder="Search anime…" value="{{ q or '' }}" aria-label="Search anime">
+  </form>
+  <div class="me">
+    {% if user %}
+      <details class="menu">
+        <summary><span class="avatar" style="--c: {{ user.color }}">{{ user.display_name[:1]|upper }}</span></summary>
+        <div class="menu-body">
+          <strong>{{ user.display_name }}</strong>
+          <a href="/u/{{ user.username }}">My list</a>
+          <a href="/import">Import from MAL</a>
+          <a href="/export.json">Export my list</a>
+          <a href="/settings">Settings</a>
+          {% if user.is_admin %}<a href="/admin">Admin</a>{% endif %}
+          <form method="post" action="/logout"><button class="linklike">Log out</button></form>
+        </div>
+      </details>
+    {% else %}
+      <a class="btn small" href="/login">Log in</a>
+    {% endif %}
+  </div>
+</header>
+<main>
+  {% for f in flashes %}<div class="flash {{ f.kind }}">{{ f.msg }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<footer>Anime data and scores from <a href="https://myanimelist.net">MyAnimeList</a>, with <a href="https://anilist.co">AniList</a> as a fallback.</footer>
+</body>
+</html>

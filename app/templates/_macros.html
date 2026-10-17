@@ -1,0 +1,74 @@
+{% macro poster(a, cls="") -%}
+<img class="poster {{ cls }}" src="{{ a.image_url or '/static/noimg.svg' }}" alt="" loading="lazy">
+{%- endmacro %}
+
+{% macro avatar(u) -%}
+<span class="avatar" style="--c: {{ u.color }}" title="{{ u.display_name }}">{{ u.display_name[:1]|upper }}</span>
+{%- endmacro %}
+
+{% macro member(u) -%}
+<a class="member" href="/u/{{ u.username }}">{{ avatar(u) }}<span>{{ u.display_name }}</span></a>
+{%- endmacro %}
+
+{# 1–10 strip with one dot per member, plus the club average and MAL score. #}
+{% macro strip(dots, rows, mean=None, mal=None) -%}
+<div class="strip" style="--rows: {{ rows }}">
+  <div class="strip-track"></div>
+  {% for i in range(1, 11) %}<span class="tick" style="left: {{ (i - 1) / 9 * 100 }}%">{{ i }}</span>{% endfor %}
+  {% if mal %}<span class="marker mal" style="left: {{ (mal - 1) / 9 * 100 }}%" title="MyAnimeList {{ mal }}">MAL</span>{% endif %}
+  {% if mean is not none %}<span class="marker avg" style="left: {{ (mean - 1) / 9 * 100 }}%" title="Club average {{ mean|num }}">avg</span>{% endif %}
+  {% for d in dots %}
+    <span class="dot" style="--c: {{ d.color }}; left: {{ d.left }}%; --stack: {{ d.stack }}" title="{{ d.name }}: {{ d.score|score }}">{{ d.initial }}</span>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro streaming(links_json, empty=None) -%}
+{% set links = links_json|fromjson %}
+{% if links %}
+<div class="streams">
+  {% for l in links %}
+    <a class="stream" href="{{ l.url }}" target="_blank" rel="noopener" style="--c: {{ l.color or 'var(--accent)' }}">
+      {% if l.icon %}<img src="{{ l.icon }}" alt="" loading="lazy">{% endif %}{{ l.site }}{% if l.note %} <small>{{ l.note }}</small>{% endif %}</a>
+  {% endfor %}
+</div>
+{% elif empty %}<p class="muted small">{{ empty }}</p>{% endif %}
+{%- endmacro %}
+
+{% macro entry_form(a, entry, next) -%}
+<form class="entry-form" method="post" action="/anime/{{ a.mal_id }}/entry">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Status
+    <select name="status">
+      {% for k, v in STATUSES.items() %}
+        <option value="{{ k }}" {% if (entry.status if entry else 'watching') == k %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Episodes
+    <span class="eps"><input type="number" name="episodes_watched" min="0" {% if a.episodes %}max="{{ a.episodes }}"{% endif %}
+      value="{{ entry.episodes_watched if entry else 0 }}"> / {{ a.episodes or '?' }}</span>
+  </label>
+  <label>Score
+    <input type="number" name="score" min="1" max="10" step="0.5" placeholder="1–10"
+      value="{{ entry.score|score if entry and entry.score is not none else '' }}">
+  </label>
+  <label class="wide">Notes
+    <input type="text" name="notes" maxlength="500" placeholder="Thoughts, hot takes…" value="{{ entry.notes or '' if entry else '' }}">
+  </label>
+  <div class="actions">
+    <button class="btn">{{ 'Update' if entry else 'Add to my list' }}</button>
+    {% if entry %}<button class="btn ghost" name="action" value="remove">Remove</button>{% endif %}
+  </div>
+</form>
+{%- endmacro %}
+
+{% macro pick_form(a, defaults) -%}
+<form class="pick-form" method="post" action="/picks">
+  <input type="hidden" name="mal_id" value="{{ a.mal_id }}">
+  <label>Starts <input type="date" name="start_date" value="{{ defaults[0] }}" required></label>
+  <label>Ends <input type="date" name="end_date" value="{{ defaults[1] }}"></label>
+  <label class="wide">Note <input type="text" name="note" maxlength="200" placeholder="e.g. eps 1–6 this week"></label>
+  <button class="btn">Schedule as club pick</button>
+</form>
+{%- endmacro %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}{{ ua.display_name }} vs {{ ub.display_name }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<section class="versus">
+  <div style="--c: {{ ua.color }}">{{ m.member(ua) }}</div>
+  <div class="vs-stats">
+    {% if p.n %}
+      <b>±{{ p.mad|num }}</b><span>average gap over {{ p.n }} shared shows</span>
+      {% if p.r is not none %}<span class="muted">correlation {{ p.r|num(2) }}</span>{% endif %}
+      {% if p.bias is not none and p.bias|abs >= 0.2 %}
+        <span class="muted">{{ ua.display_name if p.bias > 0 else ub.display_name }} scores {{ p.bias|abs|num }} higher on average</span>
+      {% endif %}
+    {% else %}<span>No shows scored by both yet.</span>{% endif %}
+  </div>
+  <div style="--c: {{ ub.color }}">{{ m.member(ub) }}</div>
+</section>
+
+{% if rows %}
+<section>
+  <h2>Shared shows, biggest disagreements first</h2>
+  <div class="table-wrap">
+    <table class="list duel-table">
+      <thead><tr><th>Anime</th><th class="num">{{ ua.display_name }}</th><th class="duel-bar"></th><th class="num">{{ ub.display_name }}</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td class="title-cell"><a href="/anime/{{ r.anime.mal_id }}">{{ m.poster(r.anime, "thumb") }}<span>{{ title_of(r.anime) }}{% if r.club %}<small class="tag">club pick</small>{% endif %}</span></a></td>
+            <td class="num"><b style="color: {{ ua.color }}">{{ r.a|score }}</b></td>
+            <td class="duel-bar">
+              <div class="duel" style="--l: {{ ((r.b if r.a > r.b else r.a) - 1) / 9 * 100 }}%; --w: {{ (r.diff|abs) / 9 * 100 }}%">
+                <i class="seg"></i>
+                <span class="dot" style="--c: {{ ua.color }}; left: {{ (r.a - 1) / 9 * 100 }}%"></span>
+                <span class="dot" style="--c: {{ ub.color }}; left: {{ (r.b - 1) / 9 * 100 }}%"></span>
+              </div>
+            </td>
+            <td class="num"><b style="color: {{ ub.color }}">{{ r.b|score }}</b></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<div class="two-col">
+  {% for target, source, recs in [(ua, ub, recs_for_a), (ub, ua, recs_for_b)] %}
+    <section>
+      <h2>{{ source.display_name }} recommends to {{ target.display_name }}</h2>
+      <p class="muted small">Scored 8+ by {{ source.display_name }}, not on {{ target.display_name }}'s list.</p>
+      {% for a, s in recs %}
+        <a class="mini-card" href="/anime/{{ a.mal_id }}">{{ m.poster(a) }}<div><b>{{ title_of(a) }}</b>
+          <span class="muted">{{ source.display_name }}: {{ s|score }} · MAL {{ a.mal_score|num(2) }}</span></div></a>
+      {% else %}<p class="muted">Nothing yet.</p>{% endfor %}
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}

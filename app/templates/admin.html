@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Admin · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<h1>Admin</h1>
+<div class="two-col">
+  <section class="card">
+    <h2>Invite friends</h2>
+    <p>Send them this link:</p>
+    <p><code class="copy">{{ base_url }}/register?code={{ invite }}</code></p>
+    {% if invite_from_env %}
+      <p class="muted small">The invite code is set by the <code>INVITE_CODE</code> environment variable.</p>
+    {% else %}
+      <form method="post" action="/admin"><button class="btn ghost" name="action" value="new_invite">Generate a new code</button></form>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>Guest access</h2>
+    <p>{% if guest_view %}Anyone with the link can <b>view</b> the club page, lists and comparisons (read-only).{% else %}Only logged-in members can see anything.{% endif %}</p>
+    <form method="post" action="/admin"><button class="btn ghost" name="action" value="toggle_guest">{{ 'Make private' if guest_view else 'Allow read-only guests' }}</button></form>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Metadata sources</h2>
+  <p class="muted small">Tried in order; the next one is used when one fails. Set with <code>METADATA_SOURCES</code>.</p>
+  <table class="list">
+    <thead><tr><th>#</th><th>Source</th><th>Last success</th><th>Last error</th></tr></thead>
+    <tbody>
+      {% for s in sources %}
+        <tr>
+          <td class="muted">{{ s.position or '–' }}</td>
+          <td><b>{{ s.label }}</b>
+            {% if not s.enabled %}<span class="tag">not configured</span>
+            {% elif not s.position %}<span class="tag">off</span>
+            {% elif s.cooling %}<span class="tag" style="{{ tint(-1) }}">skipped for now</span>{% endif %}</td>
+          <td class="muted">{{ ago(s.last_ok) }}</td>
+          <td class="small">{% if s.last_error %}{{ ago(s.last_error[0]) }} · {{ s.last_error[1] }}{% else %}<span class="muted">–</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Members</h2>
+  <table class="list">
+    <thead><tr><th>Member</th><th class="num">Entries</th><th>Joined</th><th></th></tr></thead>
+    <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ m.member(u) }} <span class="muted">@{{ u.username }}</span>{% if u.is_admin %} <span class="tag">admin</span>{% endif %}</td>
+          <td class="num">{{ u.n }}</td>
+          <td class="muted">{{ u.created_at[:10] }}</td>
+          <td class="actions">
+            {% if u.id != user.id %}
+              <form method="post" action="/admin" class="inline"><input type="hidden" name="user_id" value="{{ u.id }}">
+                <button class="linklike" name="action" value="reset_password">reset password</button>
+                <button class="linklike" name="action" value="toggle_admin">{{ 'remove admin' if u.is_admin else 'make admin' }}</button>
+                <button class="linklike danger" name="action" value="delete" onclick="return confirm('Delete {{ u.username }} and their whole list?')">delete</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

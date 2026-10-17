@@ -1,0 +1,24 @@
+# Secrets and local config (MAL_CLIENT_ID, INVITE_CODE, SECRET_KEY…)
+.env
+.env.*
+!.env.example
+
+# The database: it holds members' password hashes and session keys
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editors and OS clutter
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

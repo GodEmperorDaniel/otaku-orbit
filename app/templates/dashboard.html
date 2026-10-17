@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+
+{% if current %}
+<section class="hero">
+  <a href="/anime/{{ current.mal_id }}">{{ m.poster(current, "big") }}</a>
+  <div class="hero-body">
+    <p class="eyebrow">
+      {% if current.end_date >= today %}Now watching{% else %}Last pick · ended {{ current.end_date }}{% endif %}
+      · {{ current.start_date }} → {{ current.end_date }}
+      {% if current.picker_name %}· picked by <span class="name" style="--c: {{ current.picker_color }}">{{ current.picker_name }}</span>{% endif %}
+    </p>
+    <h1><a href="/anime/{{ current.mal_id }}">{{ title_of(current) }}</a></h1>
+    <p class="meta">{{ current.type or '' }}{% if current.year %} · {{ current.year }}{% endif %}{% if current.episodes %} · {{ current.episodes }} eps{% endif %}
+      {% for g in (current.genres|genres)[:4] %}<span class="tag">{{ g }}</span>{% endfor %}</p>
+    {% if current.note %}<p class="note">“{{ current.note }}”</p>{% endif %}
+    {{ m.streaming(current.links) }}
+
+    <div class="stat-row">
+      <div class="stat"><span>Club avg</span><b>{{ current.mean|num }}</b><small>{{ current.n }} of {{ users|length }} scored</small></div>
+      <div class="stat"><span>MyAnimeList</span><b>{{ current.mal_score|num(2) }}</b></div>
+      <div class="stat"><span>Spread</span><b>{{ current.sd|num }}</b><small>std. dev.</small></div>
+    </div>
+
+    {{ m.strip(current.dots, current.rows, current.mean, current.mal_score) }}
+
+    <ul class="progress-list">
+      {% for mem in current.members %}
+        {% set e = mem.entry %}
+        <li>
+          {{ m.member(mem.user) }}
+          <span class="bar"><i style="--c: {{ mem.user.color }}; width: {{ ((e.episodes_watched / current.episodes * 100) if e and current.episodes else 0)|round }}%"></i></span>
+          <span class="muted">{{ e.episodes_watched if e else 0 }}/{{ current.episodes or '?' }}</span>
+          <b class="score-pill" style="{{ tint(mem.delta) }}">{{ e.score|score if e else '–' }}</b>
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if user %}
+      <details class="quick" {% if not current.mine %}open{% endif %}>
+        <summary>{{ 'Update my progress & score' if current.mine else 'Add my progress & score' }}</summary>
+        {{ m.entry_form(current, current.mine, '/') }}
+      </details>
+    {% endif %}
+  </div>
+</section>
+{% else %}
+<section class="empty card">
+  <h1>No club pick yet</h1>
+  <p>Find something to watch together and hit <em>Schedule as club pick</em> on its page.</p>
+  <a class="btn" href="/search">Browse this season</a>
+</section>
+{% endif %}
+
+{% if upcoming %}
+<section>
+  <h2>Up next</h2>
+  <div class="row-cards">
+    {% for p in upcoming %}
+      <a class="mini-card" href="/anime/{{ p.mal_id }}">
+        {{ m.poster(p) }}
+        <div><b>{{ title_of(p) }}</b><span class="muted">from {{ p.start_date }}</span>
+          {% if p.picker_name %}<span class="name" style="--c: {{ p.picker_color }}">{{ p.picker_name }}</span>{% endif %}</div>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if past %}
+<section>
+  <div class="section-head">
+    <h2>Past picks</h2>
+    <a href="/compare">See how our tastes compare →</a>
+  </div>
+  <div class="table-wrap">
+    <table class="scoreboard">
+      <thead>
+        <tr>
+          <th>Anime</th>
+          {% for u in users %}<th class="num">{{ m.avatar(u) }}</th>{% endfor %}
+          <th class="num">Club</th><th class="num">MAL</th><th class="num" title="Standard deviation of club scores">Spread</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in past %}
+          <tr>
+            <td class="title-cell"><a href="/anime/{{ p.mal_id }}">{{ m.poster(p, "thumb") }}<span>{{ title_of(p) }}<small>{{ p.start_date }}</small></span></a></td>
+            {% for mem in p.members %}
+              <td class="num"><span class="score-pill" style="{{ tint(mem.delta) }}">{{ mem.entry.score|score if mem.entry else '–' }}</span></td>
+            {% endfor %}
+            <td class="num"><b>{{ p.mean|num }}</b></td>
+            <td class="num muted">{{ p.mal_score|num(2) }}</td>
+            <td class="num muted">{{ p.sd|num }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="legend"><span class="score-pill" style="{{ tint(1.5) }}">8</span> above the club average for that show · <span class="score-pill" style="{{ tint(-1.5) }}">5</span> below it</p>
+</section>
+{% endif %}
+
+{% if recent %}
+<section>
+  <h2>Recent activity</h2>
+  <ul class="activity">
+    {% for r in recent %}
+      <li>
+        <span class="avatar" style="--c: {{ r.color }}">{{ r.display_name[:1]|upper }}</span>
+        <span><a href="/u/{{ r.username }}">{{ r.display_name }}</a>
+          {% if r.status == 'completed' %}finished{% elif r.status == 'watching' %}is watching{% elif r.status == 'dropped' %}dropped{% elif r.status == 'on_hold' %}paused{% else %}plans to watch{% endif %}
+          <a href="/anime/{{ r.mal_id }}">{{ title_of(r) }}</a>
+          {% if r.score is not none %}<b class="score-pill">{{ r.score|score }}</b>{% endif %}</span>
+        <time class="muted">{{ r.updated_at[:10] }}</time>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

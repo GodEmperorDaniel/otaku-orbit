@@ -1,0 +1,16 @@
+services:
+  animeclub:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      SITE_NAME: "Anime Club"
+      PICK_DAYS: "14"            # default length of a club pick
+      MAL_CLIENT_ID: ${MAL_CLIENT_ID:-}   # set in .env
+      # INVITE_CODE: "pick-a-code"  # otherwise one is generated; see the Admin page
+      # HTTPS_ONLY: "1"             # set when serving behind HTTPS (secure cookies)
+      # METADATA_SOURCES: "mal,anilist"  # order to try; add ",jikan" to use Jikan as a last resort
+      # SFW: "0"                   # include adult titles in search

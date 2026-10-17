@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Tastes · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>How our tastes compare</h1>
+  <nav class="tabs compact">
+    <a href="?scope=club" class="{{ 'on' if scope == 'club' }}">Club picks <small>{{ n_picks }}</small></a>
+    <a href="?scope=all" class="{{ 'on' if scope == 'all' }}">Everything we've rated</a>
+  </nav>
+</div>
+<p class="muted">{% if scope == 'club' %}Based only on the shows we've watched together as a club.{% else %}Based on every show at least two of us have scored.{% endif %}
+  {{ ov.rated_titles }} titles have scores from two or more members.</p>
+
+{% if users|length < 2 %}
+  <p class="card">Invite some friends first — comparisons need at least two members.</p>
+{% else %}
+
+<section>
+  <h2>Members</h2>
+  <div class="member-cards">
+    {% for s in ov.members %}
+      <div class="card member-card" style="--c: {{ s.user.color }}">
+        {{ m.member(s.user) }}
+        <dl>
+          <dt>Scored</dt><dd>{{ s.n }}</dd>
+          <dt>Average</dt><dd>{{ s.mean|num(2) }}</dd>
+          <dt title="Standard deviation: how much of the scale they use">Range used</dt><dd>± {{ s.sd|num }}</dd>
+          <dt>vs MAL</dt><dd><span class="score-pill" style="{{ tint(s.vs_mal) }}">{{ s.vs_mal|signed }}</span></dd>
+          <dt title="Average of (their score − everyone else's average) on shared shows">vs club</dt><dd><span class="score-pill" style="{{ tint(s.vs_club) }}">{{ s.vs_club|signed }}</span></dd>
+        </dl>
+        <p class="small">
+          {% if s.vs_club is not none %}
+            {% if s.vs_club > 0.5 %}The club's optimist.{% elif s.vs_club < -0.5 %}The club's toughest critic.{% else %}Right in step with the group.{% endif %}
+          {% endif %}
+          {% if s.twin %}<br>Taste twin: <b style="color: {{ s.twin.color }}">{{ s.twin.display_name }}</b> <span class="muted">(±{{ s.twin_mad|num }})</span>{% endif %}
+          {% if s.nemesis and s.nemesis.id != s.twin.id %}<br>Most at odds with: <b style="color: {{ s.nemesis.color }}">{{ s.nemesis.display_name }}</b> <span class="muted">(±{{ s.nemesis_mad|num }})</span>{% endif %}
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section>
+  <h2>Agreement matrix</h2>
+  <p class="muted">Each cell is the average gap between two people's scores on shows they've both rated — lower means more alike. Click a cell for the head-to-head.</p>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th></th>{% for b in users %}<th>{{ m.avatar(b) }}<span class="small">{{ b.display_name }}</span></th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for a in users %}
+          <tr>
+            <th>{{ m.member(a) }}</th>
+            {% for b in users %}
+              {% set p = ov.matrix[a.id][b.id] %}
+              {% if a.id == b.id %}<td class="self"></td>
+              {% elif not p.n %}<td class="none">no overlap</td>
+              {% else %}
+                <td style="{{ agree(p.mad) }}"><a href="/compare/{{ a.username }}/{{ b.username }}">
+                  <b>±{{ p.mad|num }}</b>
+                  <small>{{ p.n }} shared{% if p.r is not none %} · r {{ p.r|num(2) }}{% endif %}</small></a></td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if ov.pairs|length > 1 %}
+    {% set best = ov.pairs[0] %}{% set worst = ov.pairs[-1] %}
+    <p>Most in sync: <b style="color: {{ best.a.color }}">{{ best.a.display_name }}</b> &amp; <b style="color: {{ best.b.color }}">{{ best.b.display_name }}</b> (±{{ best.mad|num }}).
+       Least: <b style="color: {{ worst.a.color }}">{{ worst.a.display_name }}</b> &amp; <b style="color: {{ worst.b.color }}">{{ worst.b.display_name }}</b> (±{{ worst.mad|num }}).</p>
+  {% endif %}
+</section>
+
+<div class="two-col">
+  <section>
+    <h2>Most divisive</h2>
+    {% for t in ov.divisive %}
+      <div class="card split-card">
+        <a href="/anime/{{ t.anime.mal_id }}">{{ m.poster(t.anime, "thumb") }}<b>{{ title_of(t.anime) }}</b></a>
+        <span class="muted small">{{ t.low|score }} – {{ t.high|score }} · ±{{ t.sd|num }}</span>
+        {{ m.strip(t.dots[0], t.dots[1], t.mean, t.anime.mal_score) }}
+      </div>
+    {% else %}<p class="muted">Not enough shared scores yet.</p>{% endfor %}
+  </section>
+  <section>
+    <h2>We all agree on</h2>
+    {% for t in ov.consensus %}
+      <div class="card split-card">
+        <a href="/anime/{{ t.anime.mal_id }}">{{ m.poster(t.anime, "thumb") }}<b>{{ title_of(t.anime) }}</b></a>
+        <span class="muted small">avg {{ t.mean|num }} · ±{{ t.sd|num }}</span>
+        {{ m.strip(t.dots[0], t.dots[1], t.mean, t.anime.mal_score) }}
+      </div>
+    {% else %}<p class="muted">Not enough shared scores yet.</p>{% endfor %}
+  </section>
+</div>
+
+{% if ov.genres %}
+<section>
+  <h2>Genre leanings</h2>
+  <p class="muted">How each person scores a genre compared to their own average — so a harsh scorer's favourite genre still shows up green. Sorted by how much we disagree.</p>
+  <div class="table-wrap">
+    <table class="genre-table">
+      <thead><tr><th>Genre</th>{% for u in users %}<th class="num">{{ m.avatar(u) }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for g in ov.genres %}
+          <tr>
+            <th>{{ g.name }}</th>
+            {% for u in users %}
+              {% set cell = g.cells.get(u.id) %}
+              {% if cell %}
+                <td class="num" style="{{ tint(cell.delta, 1.5) }}" title="{{ u.display_name }}: avg {{ cell.avg|num }} over {{ cell.n }}">{{ cell.delta|signed }}</td>
+              {% else %}<td class="num muted">·</td>{% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

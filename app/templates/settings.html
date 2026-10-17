@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<form class="card narrow form" method="post" action="/settings">
+  <h1>Settings</h1>
+  <label>Display name <input name="display_name" maxlength="40" value="{{ user.display_name }}"></label>
+  <label>Your colour <span class="muted small">(used for your dots and charts)</span>
+    <span class="swatches">
+      {% for c in PALETTE %}
+        <label class="swatch" style="--c: {{ c }}"><input type="radio" name="swatch" value="{{ c }}" {% if c == user.color %}checked{% endif %}
+          onchange="document.getElementById('color').value = this.value"></label>
+      {% endfor %}
+      <input type="color" id="color" name="color" value="{{ user.color }}" title="Custom colour"
+        oninput="document.querySelectorAll('.swatch input').forEach(r => r.checked = false)">
+    </span>
+  </label>
+  <h3>Change password</h3>
+  <label>Current password <input type="password" name="current_password" autocomplete="current-password"></label>
+  <label>New password <input type="password" name="new_password" minlength="8" autocomplete="new-password"></label>
+  <button class="btn">Save</button>
+</form>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Import · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<form class="card narrow form" method="post" action="/import" enctype="multipart/form-data">
+  <h1>Import from MyAnimeList</h1>
+  <ol class="small">
+    <li>On MyAnimeList go to <a href="https://myanimelist.net/panel.php?go=export" target="_blank" rel="noopener">Profile → Export</a>, choose <em>Anime List</em> and download the file.</li>
+    <li>Upload the <code>animelist_….xml.gz</code> file here as-is (no need to unzip).</li>
+  </ol>
+  <label>Export file <input type="file" name="file" accept=".xml,.gz" required></label>
+  <label class="check"><input type="checkbox" name="overwrite"> Overwrite entries already on my list here</label>
+  <button class="btn">Import</button>
+  <p class="muted small">Your statuses, scores and episode counts are copied. Posters and MAL scores are fetched in the background — a big list takes a few minutes.</p>
+</form>
+{% endblock %}

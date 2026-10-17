@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>{{ code }}</h1>
+  <p>{{ detail }}</p>
+  <a class="btn" href="/">Back to the club</a>
+</section>
+{% endblock %}

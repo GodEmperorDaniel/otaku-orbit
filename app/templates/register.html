@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Join · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<form class="card narrow form" method="post" action="/register">
+  <h1>{% if first %}Set up {{ SITE_NAME }}{% else %}Join {{ SITE_NAME }}{% endif %}</h1>
+  {% if first %}<p class="muted">You're the first member, so you'll be the admin. You can invite friends from the Admin page afterwards.</p>{% endif %}
+  <label>Username <input name="username" autocomplete="username" pattern="[A-Za-z0-9_\-]{2,24}" required autofocus></label>
+  <label>Display name <input name="display_name" maxlength="40" placeholder="Optional"></label>
+  <label>Password <input type="password" name="password" autocomplete="new-password" minlength="8" required></label>
+  {% if not first %}<label>Invite code <input name="code" value="{{ code }}" required></label>{% endif %}
+  <button class="btn">Create account</button>
+  {% if not first %}<p class="muted small">Already have an account? <a href="/login">Log in</a>.</p>{% endif %}
+</form>
+{% endblock %}

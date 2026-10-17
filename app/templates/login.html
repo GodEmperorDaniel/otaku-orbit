@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Log in · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<form class="card narrow form" method="post" action="/login">
+  <h1>Log in</h1>
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Username <input name="username" autocomplete="username" required autofocus></label>
+  <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+  <button class="btn">Log in</button>
+  <p class="muted small">New here? Get an invite link from your club admin, or <a href="/register">register with a code</a>.</p>
+</form>
+{% endblock %}
