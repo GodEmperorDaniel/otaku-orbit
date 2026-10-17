@@ -52,6 +52,15 @@ app.add_middleware(
     same_site="lax",
     https_only=os.environ.get("HTTPS_ONLY") == "1",
 )
+if os.environ.get("HTTPS_ONLY") == "1":
+    @app.middleware("http")
+    async def upgrade_to_https(request: Request, call_next):
+        # The session cookie is Secure, so a visit over plain http could never stay logged in.
+        # Only act when a proxy says the visitor used http; direct LAN requests carry no such header.
+        if request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "http":
+            return RedirectResponse(str(request.url.replace(scheme="https", port=None)), status_code=308)
+        return await call_next(request)
+
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 
