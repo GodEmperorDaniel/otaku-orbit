@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
-  <link rel="icon" href="/static/icon.svg">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="{{ static_url('icon.svg') }}">
+  <link rel="stylesheet" href="{{ static_url('style.css') }}">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/"><img src="/static/icon.svg" alt="">{{ SITE_NAME }}</a>
+  <a class="brand" href="/"><img src="{{ static_url('icon.svg') }}" alt="">{{ SITE_NAME }}</a>
   <nav>
     <a href="/">Club</a>
     <a href="/compare">Tastes</a>

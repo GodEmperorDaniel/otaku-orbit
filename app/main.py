@@ -1,4 +1,6 @@
 import datetime as dt
+import functools
+import hashlib
 import hmac
 import json
 import logging
@@ -104,7 +106,14 @@ def title_of(a):
 
 templates.env.filters.update(score=fmt_score, num=fmt_num, signed=fmt_signed,
                              genres=lambda s: json.loads(s or "[]"), fromjson=lambda s: json.loads(s or "[]"))
-templates.env.globals.update(STATUSES=STATUSES, SITE_NAME=SITE_NAME, tint=tint, agree=agree,
+@functools.cache
+def static_url(path):
+    """URL for a static file with a fingerprint of its contents, so browsers fetch it again after an update."""
+    digest = hashlib.sha256((HERE / "static" / path).read_bytes()).hexdigest()[:10]
+    return f"/static/{path}?v={digest}"
+
+
+templates.env.globals.update(STATUSES=STATUSES, SITE_NAME=SITE_NAME, tint=tint, agree=agree, static_url=static_url,
                              title_of=title_of, PALETTE=PALETTE, SOURCE_LABELS=sources.LABELS,
                              ago=lambda t: dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M") if t else "never")
 
