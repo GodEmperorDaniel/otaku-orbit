@@ -572,18 +572,36 @@ def compare_pair(request: Request, a: str, b: str):
 
 # ---------- club picks ----------
 
+def pick_dates(request, start_date, end_date):
+    """Validated (start, end) for a pick, or None after flashing what's wrong. A blank end means PICK_DAYS."""
+    start = parse_date(start_date)
+    if start is None:
+        flash(request, "Please give a valid start date.", "error")
+        return None
+    end = parse_date(end_date) or start + dt.timedelta(days=PICK_DAYS)
+    if end < start:
+        flash(request, "The end date must be after the start date.", "error")
+        return None
+    return start, end
+
+
+def editable_pick(c, user, pick_id):
+    p = c.execute("SELECT * FROM picks WHERE id = ?", (pick_id,)).fetchone()
+    if p is None:
+        raise HTTPException(404, "No such pick")
+    if not user["is_admin"] and p["picked_by"] != user["id"]:
+        raise HTTPException(403, "Only the person who scheduled it (or an admin) can change a pick.")
+    return p
+
+
 @app.post("/picks")
 def create_pick(request: Request, mal_id: int = Form(...), start_date: str = Form(...),
                 end_date: str = Form(""), note: str = Form("")):
     user = require_user(request)
-    start = parse_date(start_date)
-    if start is None:
-        flash(request, "Please give a valid start date.", "error")
+    dates = pick_dates(request, start_date, end_date)
+    if dates is None:
         return redirect(f"/anime/{mal_id}")
-    end = parse_date(end_date) or start + dt.timedelta(days=PICK_DAYS)
-    if end < start:
-        flash(request, "The end date must be after the start date.", "error")
-        return redirect(f"/anime/{mal_id}")
+    start, end = dates
     with db.conn() as c:
         a = c.execute("SELECT * FROM anime WHERE mal_id = ?", (mal_id,)).fetchone()
         if a is None:
@@ -594,15 +612,28 @@ def create_pick(request: Request, mal_id: int = Form(...), start_date: str = For
     return redirect("/")
 
 
+@app.post("/picks/{pick_id}/edit")
+def edit_pick(request: Request, pick_id: int, start_date: str = Form(...), end_date: str = Form(""),
+              note: str = Form("")):
+    user = require_user(request)
+    with db.conn() as c:
+        p = editable_pick(c, user, pick_id)
+        back = f"/anime/{p['mal_id']}#pick-{pick_id}"
+        dates = pick_dates(request, start_date, end_date)
+        if dates is None:
+            return redirect(back)
+        start, end = dates
+        c.execute("UPDATE picks SET start_date = ?, end_date = ?, note = ? WHERE id = ?",
+                  (start.isoformat(), end.isoformat(), note.strip() or None, pick_id))
+    flash(request, f"Pick updated: {start:%b %d} → {end:%b %d}.")
+    return redirect(back)
+
+
 @app.post("/picks/{pick_id}/delete")
 def delete_pick(request: Request, pick_id: int):
     user = require_user(request)
     with db.conn() as c:
-        p = c.execute("SELECT * FROM picks WHERE id = ?", (pick_id,)).fetchone()
-        if p is None:
-            raise HTTPException(404, "No such pick")
-        if not user["is_admin"] and p["picked_by"] != user["id"]:
-            raise HTTPException(403, "Only the person who scheduled it (or an admin) can remove a pick.")
+        editable_pick(c, user, pick_id)
         c.execute("DELETE FROM picks WHERE id = ?", (pick_id,))
     flash(request, "Pick removed.")
     return redirect("/")

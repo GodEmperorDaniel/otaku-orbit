@@ -62,16 +62,26 @@
     {% if picks %}
       <ul class="plain">
         {% for p in picks %}
-          <li>{{ p.start_date }} → {{ p.end_date }}{% if p.picker_name %} · picked by {{ p.picker_name }}{% endif %}
+          <li id="pick-{{ p.id }}">{{ p.start_date }} → {{ p.end_date }}{% if p.picker_name %} · picked by {{ p.picker_name }}{% endif %}
+            {% if p.note %}<span class="muted">· “{{ p.note }}”</span>{% endif %}
             {% if user and (user.is_admin or user.id == p.picked_by) %}
-              <form method="post" action="/picks/{{ p.id }}/delete" class="inline" onsubmit="return confirm('Remove this pick?')">
-                <button class="linklike danger">remove</button></form>
+              <details class="pick-edit">
+                <summary class="linklike">edit</summary>
+                <form class="pick-form" method="post" action="/picks/{{ p.id }}/edit">
+                  <label>Starts <input type="date" name="start_date" value="{{ p.start_date }}" required></label>
+                  <label>Ends <input type="date" name="end_date" value="{{ p.end_date }}"></label>
+                  <label class="wide">Note <input type="text" name="note" maxlength="200" value="{{ p.note or '' }}" placeholder="e.g. eps 1–6 this week"></label>
+                  <button class="btn small">Save</button>
+                </form>
+                <form method="post" action="/picks/{{ p.id }}/delete" onsubmit="return confirm('Remove this pick?')">
+                  <button class="linklike danger">Remove this pick</button></form>
+              </details>
             {% endif %}
           </li>
         {% endfor %}
       </ul>
     {% endif %}
-    {% if user %}{{ m.pick_form(a, defaults) }}{% else %}<p class="muted">Log in to schedule picks.</p>{% endif %}
+    {% if user %}{% if picks %}<h3 class="small-head">Schedule it again</h3>{% endif %}{{ m.pick_form(a, defaults) }}{% else %}<p class="muted">Log in to schedule picks.</p>{% endif %}
   </section>
 </div>
 
@@ -116,4 +126,9 @@
   {% if a.source == 'anilist' %}(MAL score will fill in once MyAnimeList is reachable){% endif %}
   {% if user %}<form method="post" action="/anime/{{ a.mal_id }}/refresh" class="inline"><button class="linklike">refresh</button></form>{% endif %}
 </p>
+<script>
+// "change dates" links land on #pick-N: open that pick's edit form.
+const target = location.hash.startsWith('#pick-') && document.getElementById(location.hash.slice(1));
+if (target && target.querySelector('details.pick-edit')) target.querySelector('details.pick-edit').open = true;
+</script>
 {% endblock %}

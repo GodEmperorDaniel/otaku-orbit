@@ -395,3 +395,12 @@ td.actions .linklike { margin-left: 10px; }
 .more-sites { flex: 1 1 100%; }
 .range2 input[type="range"] { border: 0; padding: 0; border-radius: 0; box-shadow: none; }
 .roll-panel .filter-actions .btn { white-space: nowrap; }
+
+/* editing a club pick */
+.pick-edit { margin: 4px 0 10px; }
+.pick-edit > summary { display: inline; list-style: none; }
+.pick-edit > summary::-webkit-details-marker { display: none; }
+.pick-edit[open] > summary { color: var(--muted); }
+.pick-edit .pick-form { margin: 8px 0; }
+.pick-edit:target, li:target > .pick-edit { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.small-head { font-size: .95rem; margin: 16px 0 0; color: var(--muted); }

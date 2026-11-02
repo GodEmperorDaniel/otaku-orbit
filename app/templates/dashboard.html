@@ -10,6 +10,7 @@
       {% if current.end_date >= today %}Now watching{% else %}Last pick · ended {{ current.end_date }}{% endif %}
       · {{ current.start_date }} → {{ current.end_date }}
       {% if current.picker_name %}· picked by <span class="name" style="--c: {{ current.picker_color }}">{{ current.picker_name }}</span>{% endif %}
+      {% if user and (user.is_admin or user.id == current.picked_by) %}· <a href="/anime/{{ current.mal_id }}#pick-{{ current.id }}">change dates</a>{% endif %}
     </p>
     <h1><a href="/anime/{{ current.mal_id }}">{{ title_of(current) }}</a></h1>
     <p class="meta">{{ current.type or '' }}{% if current.year %} · {{ current.year }}{% endif %}{% if current.episodes %} · {{ current.episodes }} eps{% endif %}
