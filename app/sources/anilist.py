@@ -8,7 +8,7 @@ It's also where streaming links come from: MAL's API doesn't provide them.
 import html
 import re
 
-from .base import SFW, Client, NotFound, link, record, relation
+from .base import SFW, Client, NotFound, link, record, relation, unique_links
 
 NAME = "anilist"
 LABEL = "AniList"
@@ -72,7 +72,7 @@ def _links(m):
         if x.get("type") == "STREAMING" and not x.get("isDisabled") and x.get("url"):
             note = x.get("notes") or (x.get("language") if x.get("language") not in (None, "English") else None)
             out.append(link(x["site"], x["url"], x.get("color"), x.get("icon"), note))
-    return out
+    return unique_links(out)
 
 
 def normalize(m):

@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field
 
 from . import db, sources
 from .sources import anilist, mal
+from .sources.base import site_name
 
 PER_PAGE = 25
 MAX_PAGES = 5000 // PER_PAGE  # AniList refuses to page past its first 5,000 matches
@@ -25,9 +26,13 @@ KINDS = {
     "extra": ("OVAs & specials", ["OVA", "SPECIAL"]),
 }
 SKIPS = {"mine": "Skip shows on my list", "club": "Skip shows on anyone's list", "none": "Don't skip anything"}
-COMMON_SITES = ["Crunchyroll", "Netflix", "HIDIVE", "Amazon Prime Video", "Hulu", "Disney Plus", "Max"]
+# Shown up front; the rest (regional services and ones with a handful of shows) sit under "More platforms".
+MAIN_SITES = ["Crunchyroll", "Netflix", "HIDIVE", "Prime Video", "Disney+", "Hulu", "Max", "YouTube", "Tubi",
+              "RetroCrush", "Adult Swim"]
 FALLBACK_SITES = [(5, "Crunchyroll"), (10, "Netflix"), (20, "HIDIVE"), (21, "Amazon Prime Video"), (7, "Hulu"),
                   (118, "Disney Plus")]
+# Episode slider positions; the ends mean "no minimum" and "no maximum".
+EP_STOPS = [1, 2, 3, 4, 6, 8, 10, 12, 13, 20, 24, 26, 39, 50, 75, 100, 150, 200, None]
 
 
 def _int(v, lo, hi):
@@ -56,26 +61,51 @@ class Filters:
     first_only: bool = True
 
     @classmethod
-    def from_form(cls, kinds, ep_min, ep_max, score_min, score_max, platforms, skip, first_only):
+    def from_form(cls, kinds, ep_lo, ep_hi, score_min, score_max, platforms, skip, first_only):
+        """ep_lo and ep_hi are slider positions in EP_STOPS."""
+        last = len(EP_STOPS) - 1
+        lo, hi = sorted([_int(ep_lo, 0, last) or 0, last if _int(ep_hi, 0, last) is None else _int(ep_hi, 0, last)])
+        known = {name for name, _ in sites()}
         f = cls(
             kinds=[k for k in kinds if k in KINDS] or list(KINDS),
-            ep_min=_int(ep_min, 1, 5000),
-            ep_max=_int(ep_max, 1, 5000),
+            ep_min=EP_STOPS[lo] if lo > 0 else None,
+            ep_max=EP_STOPS[hi],
             score_min=_float(score_min, 1, 10),
             score_max=_float(score_max, 1, 10),
-            platforms=sorted({p for p in (_int(x, 1, 10**6) for x in platforms) if p}),
+            platforms=sorted({p for p in platforms if p in known}),
             skip=skip if skip in SKIPS else "mine",
             first_only=first_only == "1",
         )
-        if f.ep_min and f.ep_max and f.ep_min > f.ep_max:
-            f.ep_min, f.ep_max = f.ep_max, f.ep_min
         if f.score_min and f.score_max and f.score_min > f.score_max:
             f.score_min, f.score_max = f.score_max, f.score_min
         return f
 
     @classmethod
     def from_dict(cls, d):
-        return cls(**{k: v for k, v in (d or {}).items() if k in cls.__dataclass_fields__})
+        f = cls(**{k: v for k, v in (d or {}).items() if k in cls.__dataclass_fields__})
+        f.platforms = [p for p in f.platforms if isinstance(p, str)]  # older sessions stored AniList IDs
+        return f
+
+    def ep_positions(self):
+        """Slider positions for the current episode limits."""
+        lo = max((i for i, s in enumerate(EP_STOPS[:-1]) if self.ep_min and s <= self.ep_min), default=0)
+        hi = min((i for i, s in enumerate(EP_STOPS[:-1]) if self.ep_max and s >= self.ep_max),
+                 default=len(EP_STOPS) - 1)
+        return lo, hi
+
+    def ep_label(self):
+        a, b = self.ep_min, self.ep_max
+        if not a and not b:
+            return "Any length"
+        if not a:
+            return f"Up to {b} eps"
+        if not b:
+            return f"{a}+ eps"
+        return f"{a} eps" if a == b else f"{a}–{b} eps"
+
+    def platform_ids(self):
+        ids = dict(sites())
+        return sorted({i for name in self.platforms for i in ids.get(name, [])})
 
     def formats(self):
         return [fmt for k in self.kinds for fmt in KINDS[k][1]]
@@ -92,7 +122,7 @@ PROBES = 10  # pages checked per probing request
 
 
 def _ask(f, pages, light):
-    return anilist.discover(sorted(pages), PER_PAGE, f.formats(), f.platforms, f.ep_min, f.ep_max,
+    return anilist.discover(sorted(pages), PER_PAGE, f.formats(), f.platform_ids(), f.ep_min, f.ep_max,
                             f.score_min, f.score_max, light=light)
 
 
@@ -191,18 +221,29 @@ _sites = (0.0, None)
 
 
 def sites():
-    """Streaming platforms to filter by, common ones first. Cached for a day."""
+    """Streaming platforms to filter by, as [(name, [AniList IDs])] with names merged (see SITE_NAMES),
+    main ones first in MAIN_SITES order. Cached for a day."""
     global _sites
     at, cached = _sites
     if cached is None or at < time.time() - 86400:
         try:
-            cached = anilist.streaming_sites()
+            raw = anilist.streaming_sites()
             at = time.time()
         except sources.SourceError:
-            cached, at = FALLBACK_SITES, time.time() - 86400 + 300  # try again in five minutes
+            raw, at = FALLBACK_SITES, time.time() - 86400 + 300  # try again in five minutes
+        merged = {}
+        for site_id, name in raw:
+            merged.setdefault(site_name(name), []).append(site_id)
+        rank = {name: i for i, name in enumerate(MAIN_SITES)}
+        cached = sorted(merged.items(), key=lambda s: (rank.get(s[0], len(rank)), s[0].lower()))
         _sites = (at, cached)
-    rank = {name: i for i, name in enumerate(COMMON_SITES)}
-    return sorted(cached, key=lambda s: (rank.get(s[1], len(rank)), s[1].lower()))
+    return cached
+
+
+def split_sites():
+    """(main platforms, the rest) for the filter form."""
+    all_sites = sites()
+    return [s for s in all_sites if s[0] in MAIN_SITES], [s for s in all_sites if s[0] not in MAIN_SITES]
 
 
 def state_dict(f, queue, index, pages):

@@ -289,16 +289,16 @@ def random_page(request: Request):
                 entry = c.execute("SELECT * FROM entries WHERE user_id = ? AND mal_id = ?",
                                   (user["id"], a["mal_id"])).fetchone()
     return render(request, "random.html", user, f=f, a=a, entry=entry, has_prev=i > 0,
-                  number=st.get("n", 0), count=suggest.match_count(f), sites=suggest.sites(),
-                  kinds=suggest.KINDS, skips=suggest.SKIPS)
+                  number=st.get("n", 0), count=suggest.match_count(f), sites=suggest.split_sites(),
+                  kinds=suggest.KINDS, skips=suggest.SKIPS, ep_stops=suggest.EP_STOPS)
 
 
 @app.post("/random")
-def random_roll(request: Request, kind: list[str] = Form([]), ep_min: str = Form(""), ep_max: str = Form(""),
+def random_roll(request: Request, kind: list[str] = Form([]), ep_lo: str = Form(""), ep_hi: str = Form(""),
                 score_min: str = Form(""), score_max: str = Form(""), platform: list[str] = Form([]),
                 skip: str = Form("mine"), first_only: str = Form("")):
     user = viewer(request)
-    f = suggest.Filters.from_form(kind, ep_min, ep_max, score_min, score_max, platform, skip, first_only)
+    f = suggest.Filters.from_form(kind, ep_lo, ep_hi, score_min, score_max, platform, skip, first_only)
     pages = []
     try:
         queue = suggest.batch(f, user, set(), pages)

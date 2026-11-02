@@ -65,8 +65,34 @@ def relation(mal_id, title, image_url, kind):
             "relation": kind if kind in RELATIONS else "other"}
 
 
+# AniList lists some services under several names (old branding, international apps).
+SITE_NAMES = {
+    "Amazon Prime Video": "Prime Video",
+    "Disney Plus": "Disney+",
+    "Star+": "Disney+",  # folded into Disney+ in 2024
+    "Bilibili TV": "Bilibili",
+    "iQ": "iQIYI",
+    "Youku TV": "Youku",
+    "Tubi TV": "Tubi",
+}
+
+
+def site_name(site):
+    return SITE_NAMES.get(site, site)
+
+
 def link(site, url, color=None, icon=None, note=None):
-    return {"site": site, "url": url, "color": color, "icon": icon, "note": note}
+    return {"site": site_name(site), "url": url, "color": color, "icon": icon, "note": note}
+
+
+def unique_links(links):
+    """Drop repeats of the same service (and region note), keeping the first."""
+    seen, out = set(), []
+    for x in links:
+        if (x["site"], x["note"]) not in seen:
+            seen.add((x["site"], x["note"]))
+            out.append(x)
+    return out
 
 
 def current_season(today=None):

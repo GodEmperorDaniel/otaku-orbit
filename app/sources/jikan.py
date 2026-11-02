@@ -2,7 +2,7 @@
 
 import os
 
-from .base import SFW, Client, link, record, relation
+from .base import SFW, Client, link, record, relation, unique_links
 
 NAME = "jikan"
 LABEL = "Jikan"
@@ -84,7 +84,7 @@ def get(mal_id):
 
 def streaming(mal_id):
     data = _client.request("GET", f"/anime/{mal_id}/streaming")["data"]
-    return [link(x["name"], x["url"]) for x in data if x.get("url")]
+    return unique_links([link(x["name"], x["url"]) for x in data if x.get("url")])
 
 
 def health():

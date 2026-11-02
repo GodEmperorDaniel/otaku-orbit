@@ -374,3 +374,24 @@ td.actions .linklike { margin-left: 10px; }
   .suggestion { flex-direction: column; padding: 16px; }
   .suggestion-title { font-size: 1.4rem; }
 }
+
+/* two-handled slider */
+.slider-field { display: flex; flex-direction: column; gap: 4px; min-width: min(300px, 100%); }
+.slider-label { font-size: .8rem; color: var(--muted); font-weight: 600; }
+.slider-label output { color: var(--text); font-weight: 600; margin-left: 4px; }
+.range2 { --thumb: 18px; position: relative; height: 28px; }
+.range2::before, .range2 .fill { content: ""; position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 99px; }
+.range2::before { left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); background: var(--surface-2); box-shadow: 0 0 0 1px var(--border) inset; }
+.range2 .fill { background: var(--accent);
+  left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--lo));
+  right: calc(var(--thumb) / 2 + (100% - var(--thumb)) * (1 - var(--hi))); }
+.range2 input[type="range"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+.range2 input[type="range"]::-webkit-slider-runnable-track { background: none; }
+.range2 input[type="range"]::-moz-range-track { background: none; }
+.range2 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: var(--thumb); height: var(--thumb); border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent); cursor: grab; }
+.range2 input[type="range"]::-moz-range-thumb { pointer-events: auto; width: var(--thumb); height: var(--thumb); border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent); cursor: grab; box-sizing: border-box; }
+.range2 input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+.range2 input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+.more-sites { flex: 1 1 100%; }
+.range2 input[type="range"] { border: 0; padding: 0; border-radius: 0; box-shadow: none; }
+.roll-panel .filter-actions .btn { white-space: nowrap; }
