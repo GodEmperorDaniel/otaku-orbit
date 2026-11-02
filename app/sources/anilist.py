@@ -145,5 +145,58 @@ def streaming(mal_id):
     return _links(data["Media"])
 
 
+def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, score_min=None, score_max=None,
+             light=False):
+    """Several pages of released shows matching the random-picker filters, most popular first, in one request.
+
+    Returns {page: (records, has_next, raw_count)}. With light=True, records are just MAL IDs (for finding
+    where the matches end); otherwise each record gets "first_season": False when it has a prequel.
+    AniList won't page past its first 5,000 matches, so the pool is the 5,000 most popular."""
+    decl = ["$perPage: Int", "$formats: [MediaFormat]"]
+    filters = ["format_in: $formats", "status_not: NOT_YET_RELEASED", "sort: POPULARITY_DESC"]
+    variables = {"perPage": per_page, "formats": list(formats)}
+    # AniList's comparisons are exclusive and its scores run 0–100.
+    for name, gql, kind, value in [
+        ("platforms", "licensedById_in", "[Int]", list(platforms) or None),
+        ("epMin", "episodes_greater", "Int", ep_min - 1 if ep_min else None),
+        ("epMax", "episodes_lesser", "Int", ep_max + 1 if ep_max else None),
+        ("scoreMin", "averageScore_greater", "Int", round(score_min * 10) - 1 if score_min else None),
+        ("scoreMax", "averageScore_lesser", "Int", round(score_max * 10) + 1 if score_max else None),
+    ]:
+        if value is not None:
+            decl.append(f"${name}: {kind}")
+            filters.append(f"{gql}: ${name}")
+            variables[name] = value
+    fields = "idMal" if light else f"{MEDIA} {LINKS} relations {{ edges {{ relationType }} }}"
+    blocks = "\n".join(
+        f"p{n}: Page(page: {n}, perPage: $perPage) {{ pageInfo {{ hasNextPage }} "
+        f"media(type: ANIME, isAdult: $adult, {', '.join(filters)}) {{ {fields} }} }}"
+        for n in pages)
+    data = _query(f"query ($adult: Boolean, {', '.join(decl)}) {{ {blocks} }}", adult=False if SFW else None, **variables)
+    out = {}
+    for n in pages:
+        page = data[f"p{n}"]
+        items = []
+        for m in page["media"]:
+            if not m.get("idMal"):
+                continue
+            if light:
+                items.append(m["idMal"])
+                continue
+            edges = (m.pop("relations") or {}).get("edges") or []
+            a = normalize(m)
+            a["first_season"] = not any(e.get("relationType") == "PREQUEL" for e in edges)
+            items.append(a)
+        out[n] = (items, page["pageInfo"]["hasNextPage"], len(page["media"]))
+    return out
+
+
+def streaming_sites():
+    """Streaming platforms AniList knows, as [(id, name)]."""
+    data = _query("query { ExternalLinkSourceCollection(mediaType: ANIME, type: STREAMING) { id site isDisabled } }")
+    return sorted(((s["id"], s["site"]) for s in data["ExternalLinkSourceCollection"] if not s["isDisabled"]),
+                  key=lambda s: s[1].lower())
+
+
 def health():
     return _client

@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, browse, db, mal_import, sources, stats
+from . import auth, browse, db, mal_import, sources, stats, suggest
 
 logging.basicConfig(level=logging.INFO)
 
@@ -271,6 +271,76 @@ def search(request: Request):
                   total=len(results), candidates=len(candidates), error=error, mine=mine, facets=facets,
                   modes=browse.MODES, sorts=browse.SORTS, seasons=browse.SEASONS,
                   statuses=browse.STATUS_FILTERS, years=range(this_year + 1, 1959, -1), per_page=browse.PER_PAGE)
+
+
+# ---------- random suggestions ----------
+
+@app.get("/random", response_class=HTMLResponse)
+def random_page(request: Request):
+    user = viewer(request)
+    st = request.session.get("rnd") or {}
+    f = suggest.Filters.from_dict(st.get("f"))
+    queue, i = st.get("q") or [], st.get("i", 0)
+    a = entry = None
+    if 0 <= i < len(queue):
+        a = suggest.reveal(queue[i])
+        if a is not None and user:
+            with db.conn() as c:
+                entry = c.execute("SELECT * FROM entries WHERE user_id = ? AND mal_id = ?",
+                                  (user["id"], a["mal_id"])).fetchone()
+    return render(request, "random.html", user, f=f, a=a, entry=entry, has_prev=i > 0,
+                  number=st.get("n", 0), count=suggest.match_count(f), sites=suggest.sites(),
+                  kinds=suggest.KINDS, skips=suggest.SKIPS)
+
+
+@app.post("/random")
+def random_roll(request: Request, kind: list[str] = Form([]), ep_min: str = Form(""), ep_max: str = Form(""),
+                score_min: str = Form(""), score_max: str = Form(""), platform: list[str] = Form([]),
+                skip: str = Form("mine"), first_only: str = Form("")):
+    user = viewer(request)
+    f = suggest.Filters.from_form(kind, ep_min, ep_max, score_min, score_max, platform, skip, first_only)
+    pages = []
+    try:
+        queue = suggest.batch(f, user, set(), pages)
+        if not queue:
+            flash(request, "Nothing matches those filters. Try loosening them.", "error")
+    except sources.SourceError as e:
+        flash(request, f"Couldn't reach AniList for suggestions ({e}). Try again in a minute.", "error")
+        queue = []
+    request.session["rnd"] = {**suggest.state_dict(f, queue, 0, pages), "n": 1 if queue else 0}
+    return redirect("/random")
+
+
+@app.post("/random/next")
+def random_next(request: Request):
+    user = viewer(request)
+    st = request.session.get("rnd")
+    if not st:
+        return redirect("/random")
+    f = suggest.Filters.from_dict(st["f"])
+    queue, i, pages = st["q"], st["i"] + 1, st["pages"]
+    if i >= len(queue):
+        try:
+            more = suggest.batch(f, user, set(queue), pages)
+        except sources.SourceError as e:
+            flash(request, f"Couldn't reach AniList for more suggestions ({e}). Try again in a minute.", "error")
+            return redirect("/random")
+        if not more:
+            flash(request, "That's every show matching these filters. Change them to roll again.")
+            return redirect("/random")
+        drop = max(0, i - suggest.KEEP_BEHIND)
+        queue, i = queue[drop:] + more, i - drop
+    request.session["rnd"] = {**suggest.state_dict(f, queue, i, pages), "n": st.get("n", 0) + 1}
+    return redirect("/random")
+
+
+@app.post("/random/prev")
+def random_prev(request: Request):
+    viewer(request)
+    st = request.session.get("rnd")
+    if st and st["i"] > 0:
+        request.session["rnd"] = {**st, "i": st["i"] - 1, "n": max(1, st.get("n", 1) - 1)}
+    return redirect("/random")
 
 
 @app.get("/anime/{mal_id}", response_class=HTMLResponse)

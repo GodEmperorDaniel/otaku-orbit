@@ -352,3 +352,25 @@ td.actions .linklike { margin-left: 10px; }
 .pill { padding: 3px 10px; border-radius: 99px; background: color-mix(in oklab, var(--accent) 20%, var(--surface)); color: var(--text); }
 .pill:hover { text-decoration: none; background: color-mix(in oklab, var(--accent) 32%, var(--surface)); }
 .filters legend .muted { font-weight: 400; }
+
+/* --- random pick --- */
+.roll-panel { margin-bottom: 12px; }
+.roll-panel > .filters { margin-top: 10px; }
+.roll-panel .checks select { font-size: .9rem; }
+.roll-summary { margin: 0 0 12px; }
+.suggestion { display: flex; gap: 28px; align-items: flex-start; padding: 20px; }
+.suggestion-title { font-size: 1.8rem; margin: 0 0 4px; }
+.suggestion-title a { color: var(--text); }
+.suggestion-synopsis { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+.suggestion-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+.suggestion-actions form { margin: 0; }
+.reveal { animation: reveal .45s ease-out; }
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@media (prefers-reduced-motion: reduce) { .reveal { animation: none; } }
+@media (max-width: 700px) {
+  .suggestion { flex-direction: column; padding: 16px; }
+  .suggestion-title { font-size: 1.4rem; }
+}

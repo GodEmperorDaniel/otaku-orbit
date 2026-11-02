@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Random pick · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+{% set site_names = dict(sites) %}
+<div class="section-head">
+  <h1>Random pick</h1>
+</div>
+<p class="muted">Can't decide what to watch next? Set a few limits and get suggestions one at a time.</p>
+
+<details class="filter-panel roll-panel" {% if not a %}open{% endif %}>
+  <summary class="btn ghost small">{{ 'Change filters' if a else 'Filters' }}</summary>
+  <form class="filters card" method="post" action="/random">
+    <fieldset class="chips">
+      <legend>Type</legend>
+      {% for k, v in kinds.items() %}
+        <label class="chip-check"><input type="checkbox" name="kind" value="{{ k }}" {% if k in f.kinds %}checked{% endif %}><span>{{ v[0] }}</span></label>
+      {% endfor %}
+    </fieldset>
+    <label>Episodes
+      <span class="pair">
+        <input type="number" name="ep_min" min="1" max="5000" value="{{ f.ep_min or '' }}" placeholder="min">
+        <input type="number" name="ep_max" min="1" max="5000" value="{{ f.ep_max or '' }}" placeholder="max">
+      </span>
+    </label>
+    <label>Score
+      <span class="pair">
+        <input type="number" name="score_min" min="1" max="10" step="0.1" value="{{ f.score_min if f.score_min is not none else '' }}" placeholder="min">
+        <input type="number" name="score_max" min="1" max="10" step="0.1" value="{{ f.score_max if f.score_max is not none else '' }}" placeholder="max">
+      </span>
+    </label>
+    <div class="checks">
+      <label class="check"><input type="checkbox" name="first_only" value="1" {% if f.first_only %}checked{% endif %}> Only first seasons</label>
+      <label class="check">
+        <select name="skip">
+          {% for k, v in skips.items() %}{% if user or k != 'mine' %}<option value="{{ k }}" {% if f.skip == k %}selected{% endif %}>{{ v }}</option>{% endif %}{% endfor %}
+        </select>
+      </label>
+    </div>
+    <fieldset class="chips">
+      <legend>Streams on <span class="muted">· any of the ticked platforms; leave empty for all</span></legend>
+      <div class="chip-scroll">
+        {% for id, name in sites %}
+          <label class="chip-check"><input type="checkbox" name="platform" value="{{ id }}" {% if id in f.platforms %}checked{% endif %}><span>{{ name }}</span></label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <div class="filter-actions">
+      <button class="btn">{{ 'Roll again' if a else 'Roll' }}</button>
+      <span class="muted small">Scores here are AniList's average, which is usually within a few tenths of MAL's.</span>
+    </div>
+  </form>
+</details>
+
+{% if a %}
+  <p class="muted small roll-summary">
+    {% for k in f.kinds %}{{ kinds[k][0] }}{% if not loop.last %}, {% endif %}{% endfor %}
+    {%- if f.ep_min or f.ep_max %} · {{ f.ep_min or 1 }}–{{ f.ep_max or '∞' }} eps{% endif %}
+    {%- if f.score_min is not none or f.score_max is not none %} · score {{ f.score_min|score if f.score_min is not none else 1 }}–{{ f.score_max|score if f.score_max is not none else 10 }}{% endif %}
+    {%- if f.platforms %} · on {% for p in f.platforms %}{{ site_names.get(p, 'platform ' ~ p) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+    {%- if f.first_only %} · first seasons{% endif %}
+    {%- if count %} · from {{ '{:,}'.format(count) }}{% if count >= 5000 %}+{% endif %} matching shows{% endif %}
+  </p>
+
+  <article class="card suggestion reveal" aria-live="polite">
+    <a href="/anime/{{ a.mal_id }}">{{ m.poster(a, "big") }}</a>
+    <div class="hero-body">
+      <p class="eyebrow">Suggestion #{{ number }}</p>
+      <h2 class="suggestion-title"><a href="/anime/{{ a.mal_id }}">{{ title_of(a) }}</a></h2>
+      {% if a.title_english and a.title_english != a.title %}<p class="muted">{{ a.title }}</p>{% endif %}
+      <p class="meta">
+        {{ a.type or '' }}{% if a.year %} · {{ (a.season or '')|capitalize }} {{ a.year }}{% endif %}
+        {% if a.episodes %} · {{ a.episodes }} eps{% endif %}
+        {% for s in a.studios|genres %} · {{ s }}{% endfor %}
+      </p>
+      <p>
+        <span class="mal-badge" title="MyAnimeList score">★ {{ a.mal_score|num(2) }}</span>
+        {% for g in a.genres|genres %}<span class="tag">{{ g }}</span>{% endfor %}
+      </p>
+      {% if a.synopsis %}<p class="suggestion-synopsis">{{ a.synopsis }}</p>{% endif %}
+      {{ m.streaming(a.links, "No streaming platforms listed for this one.") }}
+
+      <div class="suggestion-actions">
+        {% if has_prev %}<form method="post" action="/random/prev"><button class="btn ghost">← Previous</button></form>{% endif %}
+        <form method="post" action="/random/next"><button class="btn" autofocus>Next suggestion →</button></form>
+        <a class="btn ghost" href="/anime/{{ a.mal_id }}">Details &amp; club pick</a>
+        {% if entry %}
+          <span class="tag on">{{ STATUSES[entry.status] }}{% if entry.score is not none %} · {{ entry.score|score }}{% endif %}</span>
+        {% elif user %}
+          <form method="post" action="/anime/{{ a.mal_id }}/entry">
+            <input type="hidden" name="status" value="plan">
+            <input type="hidden" name="next" value="/random">
+            <button class="btn ghost">+ Plan to watch</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </article>
+{% endif %}
+{% endblock %}

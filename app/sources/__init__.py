@@ -21,7 +21,7 @@ LABELS = {p.NAME: p.LABEL for p in PROVIDERS.values()}
 REFRESH_DAYS = int(os.environ.get("REFRESH_DAYS", "7"))
 
 __all__ = ["NotFound", "SourceError", "LABELS", "RANKINGS", "RELATIONS", "current_season", "active", "browse",
-           "fetch_and_store", "ensure_links", "start_refresher", "wake_refresher", "status"]
+           "fetch_and_store", "ensure_links", "remember", "start_refresher", "wake_refresher", "status"]
 
 
 def _configure():
@@ -78,6 +78,11 @@ def _store(items):
     if stubs:
         wake_refresher()
     return items
+
+
+def remember(items):
+    """Save records fetched outside the provider chain (such as random suggestions from AniList)."""
+    return _store(items)
 
 
 def _cached(key, ttl, fetch):
