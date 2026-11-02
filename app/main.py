@@ -296,9 +296,10 @@ def random_page(request: Request):
 @app.post("/random")
 def random_roll(request: Request, kind: list[str] = Form([]), ep_lo: str = Form(""), ep_hi: str = Form(""),
                 score_min: str = Form(""), score_max: str = Form(""), platform: list[str] = Form([]),
-                skip: str = Form("mine"), first_only: str = Form("")):
+                skip: str = Form("mine"), first_only: str = Form(""), no_spinoffs: str = Form("")):
     user = viewer(request)
-    f = suggest.Filters.from_form(kind, ep_lo, ep_hi, score_min, score_max, platform, skip, first_only)
+    f = suggest.Filters.from_form(kind, ep_lo, ep_hi, score_min, score_max, platform, skip, first_only,
+                                  no_spinoffs)
     pages = []
     try:
         queue = suggest.batch(f, user, set(), pages)

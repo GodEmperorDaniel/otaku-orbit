@@ -34,6 +34,7 @@
     </label>
     <div class="checks">
       <label class="check"><input type="checkbox" name="first_only" value="1" {% if f.first_only %}checked{% endif %}> Only first seasons</label>
+      <label class="check"><input type="checkbox" name="no_spinoffs" value="1" {% if f.no_spinoffs %}checked{% endif %}> Skip spin-offs &amp; side stories</label>
       <label class="check">
         <select name="skip">
           {% for k, v in skips.items() %}{% if user or k != 'mine' %}<option value="{{ k }}" {% if f.skip == k %}selected{% endif %}>{{ v }}</option>{% endif %}{% endfor %}
@@ -69,6 +70,7 @@
     {%- if f.score_min is not none or f.score_max is not none %} · score {{ f.score_min|score if f.score_min is not none else 1 }}–{{ f.score_max|score if f.score_max is not none else 10 }}{% endif %}
     {%- if f.platforms %} · on {{ f.platforms|join(', ') }}{% endif %}
     {%- if f.first_only %} · first seasons{% endif %}
+    {%- if f.no_spinoffs %} · no spin-offs{% endif %}
     {%- if count %} · from {{ '{:,}'.format(count) }}{% if count >= 5000 %}+{% endif %} matching shows{% endif %}
   </p>
 

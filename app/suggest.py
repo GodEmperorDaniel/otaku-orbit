@@ -25,7 +25,8 @@ KINDS = {
     "movie": ("Movies", ["MOVIE"]),
     "extra": ("OVAs & specials", ["OVA", "SPECIAL"]),
 }
-SKIPS = {"mine": "Skip shows on my list", "club": "Skip shows on anyone's list", "none": "Don't skip anything"}
+SKIPS = {"mine": "Skip shows on my list", "club": "Skip shows anyone has started",
+         "none": "Don't skip anything"}
 # Shown up front; the rest (regional services and ones with a handful of shows) sit under "More platforms".
 MAIN_SITES = ["Crunchyroll", "Netflix", "HIDIVE", "Prime Video", "Disney+", "Hulu", "Max", "YouTube", "Tubi",
               "RetroCrush", "Adult Swim"]
@@ -59,9 +60,10 @@ class Filters:
     platforms: list = field(default_factory=list)
     skip: str = "mine"
     first_only: bool = True
+    no_spinoffs: bool = True
 
     @classmethod
-    def from_form(cls, kinds, ep_lo, ep_hi, score_min, score_max, platforms, skip, first_only):
+    def from_form(cls, kinds, ep_lo, ep_hi, score_min, score_max, platforms, skip, first_only, no_spinoffs):
         """ep_lo and ep_hi are slider positions in EP_STOPS."""
         last = len(EP_STOPS) - 1
         lo, hi = sorted([_int(ep_lo, 0, last) or 0, last if _int(ep_hi, 0, last) is None else _int(ep_hi, 0, last)])
@@ -75,6 +77,7 @@ class Filters:
             platforms=sorted({p for p in platforms if p in known}),
             skip=skip if skip in SKIPS else "mine",
             first_only=first_only == "1",
+            no_spinoffs=no_spinoffs == "1",
         )
         if f.score_min and f.score_max and f.score_min > f.score_max:
             f.score_min, f.score_max = f.score_max, f.score_min
@@ -179,7 +182,8 @@ def _skipped(f, user):
         return set()
     with db.conn() as c:
         if f.skip == "club":
-            rows = c.execute("SELECT DISTINCT mal_id FROM entries")
+            # Plan-to-watch doesn't count: someone wanting to see a show is a reason to suggest it.
+            rows = c.execute("SELECT DISTINCT mal_id FROM entries WHERE status != 'plan'")
         else:
             rows = c.execute("SELECT mal_id FROM entries WHERE user_id = ?", (user["id"],))
         return {r["mal_id"] for r in rows}
@@ -193,7 +197,9 @@ def batch(f, user, exclude, used_pages):
         drawn = _draw(f, used_pages)
         sources.remember(drawn)
         ids = list(dict.fromkeys(a["mal_id"] for a in drawn
-                                 if a["mal_id"] not in skip and (a["first_season"] or not f.first_only)))
+                                 if a["mal_id"] not in skip
+                                 and (a["first_season"] or not f.first_only)
+                                 and not (a["spin_off"] and f.no_spinoffs)))
         if ids or not drawn:
             random.shuffle(ids)
             return ids

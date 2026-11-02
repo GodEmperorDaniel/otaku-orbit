@@ -150,7 +150,8 @@ def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, s
     """Several pages of released shows matching the random-picker filters, most popular first, in one request.
 
     Returns {page: (records, has_next, raw_count)}. With light=True, records are just MAL IDs (for finding
-    where the matches end); otherwise each record gets "first_season": False when it has a prequel.
+    where the matches end); otherwise each record gets "first_season": False when it has a prequel, and
+    "spin_off": True when it links to a parent anime (spin-offs and side stories do; main series don't).
     AniList won't page past its first 5,000 matches, so the pool is the 5,000 most popular."""
     decl = ["$perPage: Int", "$formats: [MediaFormat]"]
     filters = ["format_in: $formats", "status_not: NOT_YET_RELEASED", "sort: POPULARITY_DESC"]
@@ -167,7 +168,7 @@ def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, s
             decl.append(f"${name}: {kind}")
             filters.append(f"{gql}: ${name}")
             variables[name] = value
-    fields = "idMal" if light else f"{MEDIA} {LINKS} relations {{ edges {{ relationType }} }}"
+    fields = "idMal" if light else f"{MEDIA} {LINKS} relations {{ edges {{ relationType node {{ type }} }} }}"
     blocks = "\n".join(
         f"p{n}: Page(page: {n}, perPage: $perPage) {{ pageInfo {{ hasNextPage }} "
         f"media(type: ANIME, isAdult: $adult, {', '.join(filters)}) {{ {fields} }} }}"
@@ -185,7 +186,9 @@ def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, s
                 continue
             edges = (m.pop("relations") or {}).get("edges") or []
             a = normalize(m)
-            a["first_season"] = not any(e.get("relationType") == "PREQUEL" for e in edges)
+            related = {e.get("relationType") for e in edges if (e.get("node") or {}).get("type") == "ANIME"}
+            a["first_season"] = "PREQUEL" not in related
+            a["spin_off"] = "PARENT" in related
             items.append(a)
         out[n] = (items, page["pageInfo"]["hasNextPage"], len(page["media"]))
     return out
