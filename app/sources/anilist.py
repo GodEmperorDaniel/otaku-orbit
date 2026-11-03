@@ -173,7 +173,7 @@ def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, s
             filters.append(f"{gql}: ${name}")
             variables[name] = value
     fields = "idMal" if light else (f"{MEDIA} {LINKS} averageScore "
-                                    "relations { edges { relationType node { type format startDate { year month } } } }")
+                                    "relations { edges { relationType node { id type format startDate { year month } } } }")
     blocks = "\n".join(
         f"p{n}: Page(page: {n}, perPage: $perPage) {{ pageInfo {{ hasNextPage }} "
         f"media(type: ANIME, isAdult: $adult, {', '.join(filters)}) {{ {fields} }} }}"
@@ -193,7 +193,11 @@ def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, s
                      if (e.get("node") or {}).get("type") == "ANIME"]
             a = normalize(m)
             related = {e.get("relationType") for e in edges}
-            a["first_season"] = "PREQUEL" not in related
+            a["start"] = _start(m)
+            # Sequels as (AniList ID, start). One released before this show means it's a prequel made later
+            # (Fate/Zero); suggest.py follows the chain further for longer ones (Kizumonogatari).
+            a["sequels"] = [(e["node"]["id"], _start(e["node"])) for e in edges if e.get("relationType") == "SEQUEL"]
+            a["first_season"] = "PREQUEL" not in related and all(st >= a["start"] for _, st in a["sequels"])
             a["spin_off"] = "PARENT" in related
             a["recap"] = _is_recap(m, edges)
             a["anilist_score"] = m["averageScore"] / 10 if m.get("averageScore") else None
@@ -208,13 +212,31 @@ def _is_recap(m, edges):
     Academia, Death Billiards) and TV remakes (Brotherhood, Fruits Basket 2019) don't count."""
     if m.get("format") not in ("MOVIE", "OVA", "SPECIAL"):
         return False
-
-    def start(x):
-        d = x.get("startDate") or {}
-        return (d.get("year") or 9999, d.get("month") or 13)
-
     return any(e.get("relationType") == "ALTERNATIVE" and e["node"].get("format") in ("TV", "TV_SHORT", "ONA")
-               and start(e["node"]) < start(m) for e in edges)
+               and _start(e["node"]) < _start(m) for e in edges)
+
+
+def _start(m):
+    """(year, month) a show started, for comparing release order; unknown dates sort last."""
+    d = m.get("startDate") or {}
+    return (d.get("year") or 9999, d.get("month") or 13)
+
+
+def sequels(ids):
+    """{AniList ID: [(sequel's AniList ID, its start)]} for the given shows, in one request."""
+    ids = sorted(set(ids))
+    chunks = [ids[i:i + 50] for i in range(0, len(ids), 50)]
+    blocks = "\n".join(
+        f"c{n}: Page(perPage: 50) {{ media(id_in: [{','.join(map(str, chunk))}]) {{ id "
+        f"relations {{ edges {{ relationType node {{ id type startDate {{ year month }} }} }} }} }} }}"
+        for n, chunk in enumerate(chunks))
+    data = _query(f"query {{ {blocks} }}")
+    out = dict.fromkeys(ids, [])
+    for n in range(len(chunks)):
+        for m in data[f"c{n}"]["media"]:
+            out[m["id"]] = [(e["node"]["id"], _start(e["node"])) for e in (m.get("relations") or {}).get("edges") or []
+                            if e.get("relationType") == "SEQUEL" and (e.get("node") or {}).get("type") == "ANIME"]
+    return out
 
 
 def streaming_sites():

@@ -208,6 +208,38 @@ def _skipped(f, user):
 # AniList's score for each suggestion, shown in the list view until the MAL score is fetched.
 anilist_scores = {}
 
+# AniList ID -> [(sequel's AniList ID, start)], filled in as sequel chains are followed.
+_sequel_cache = {}
+SEQUEL_HOPS = 3
+
+
+def _later_prequels(shows):
+    """MAL IDs of shows that have no prequel but aren't where their franchise starts either: following their
+    sequels leads to something released earlier. Kizumonogatari (2016) is the start of the Monogatari story,
+    and its sequels lead to Bakemonogatari (2009). Follows chains SEQUEL_HOPS steps, one request per step."""
+    chains = {a["mal_id"]: (a["start"], [i for i, _ in a["sequels"]], set()) for a in shows if a["sequels"]}
+    out = set()
+    for _ in range(SEQUEL_HOPS):
+        todo = {i for _, frontier, _ in chains.values() for i in frontier if i not in _sequel_cache}
+        if todo:
+            try:
+                _sequel_cache.update(anilist.sequels(todo))
+            except sources.SourceError:
+                break  # rather show a few later prequels than nothing
+        for mal_id, (start, frontier, seen) in list(chains.items()):
+            nxt = [(i, st) for f in frontier for i, st in _sequel_cache.get(f, []) if i not in seen]
+            seen.update(frontier)
+            if any(st < start for _, st in nxt):
+                out.add(mal_id)
+                del chains[mal_id]
+            elif nxt:
+                chains[mal_id] = (start, [i for i, _ in nxt], seen)
+            else:
+                del chains[mal_id]
+        if not chains:
+            break
+    return out
+
 
 def batch(f, user, exclude, used_pages):
     """A shuffled list of new suggestion IDs, drawing BATCH_PAGES fresh pages at a time (up to three times
@@ -219,11 +251,13 @@ def batch(f, user, exclude, used_pages):
         drawn = _draw(f, used_pages)
         sources.remember(drawn)
         anilist_scores.update((a["mal_id"], a["anilist_score"]) for a in drawn)
-        new = [a["mal_id"] for a in drawn
-               if a["mal_id"] not in skip
-               and (a["first_season"] or not f.first_only)
-               and not (a["spin_off"] and f.no_spinoffs)
-               and not (a["recap"] and f.no_recaps)]
+        kept = [a for a in drawn
+                if a["mal_id"] not in skip
+                and (a["first_season"] or not f.first_only)
+                and not (a["spin_off"] and f.no_spinoffs)
+                and not (a["recap"] and f.no_recaps)]
+        later = _later_prequels(kept) if f.first_only else set()
+        new = [a["mal_id"] for a in kept if a["mal_id"] not in later]
         ids = list(dict.fromkeys(ids + new))
         if len(ids) >= MIN_BATCH or not drawn:
             break
