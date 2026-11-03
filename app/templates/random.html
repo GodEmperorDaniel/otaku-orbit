@@ -6,10 +6,10 @@
 <div class="section-head">
   <h1>Random pick</h1>
 </div>
-<p class="muted">Can't decide what to watch next? Set a few limits and get suggestions one at a time.</p>
+<p class="muted">Can't decide what to watch next? Set a few limits and get suggestions one at a time, or as a list.</p>
 
-<details class="filter-panel roll-panel" {% if not a %}open{% endif %}>
-  <summary class="btn ghost small">{{ 'Change filters' if a else 'Filters' }}</summary>
+<details class="filter-panel roll-panel" {% if not has_queue %}open{% endif %}>
+  <summary class="btn ghost small">{{ 'Change filters' if has_queue else 'Filters' }}</summary>
   <form class="filters card" method="post" action="/random">
     <fieldset class="chips">
       <legend>Type</legend>
@@ -35,6 +35,7 @@
     <div class="checks">
       <label class="check"><input type="checkbox" name="first_only" value="1" {% if f.first_only %}checked{% endif %}> Only first seasons</label>
       <label class="check"><input type="checkbox" name="no_spinoffs" value="1" {% if f.no_spinoffs %}checked{% endif %}> Skip spin-offs &amp; side stories</label>
+      <label class="check" title="Movies, OVAs and specials that retell an earlier series"><input type="checkbox" name="no_recaps" value="1" {% if f.no_recaps %}checked{% endif %}> Skip recap &amp; retelling movies</label>
       <label class="check">
         <select name="skip">
           {% for k, v in skips.items() %}{% if user or k != 'mine' %}<option value="{{ k }}" {% if f.skip == k %}selected{% endif %}>{{ v }}</option>{% endif %}{% endfor %}
@@ -56,14 +57,31 @@
         {% endfor %}
       </details>
     {% endif %}
+    {% set n_genres = f.genres|length + f.no_genres|length %}
+    <details class="chips more-sites genre-picker" {% if n_genres %}open{% endif %}>
+      <summary>Genres{% if n_genres %} · {{ n_genres }} set{% endif %}</summary>
+      <fieldset class="chips">
+        <legend>Must have <span class="muted">· all of the ticked genres</span></legend>
+        {% for g in genres %}
+          <label class="chip-check"><input type="checkbox" name="genre" value="{{ g }}" {% if g in f.genres %}checked{% endif %}><span>{{ g }}</span></label>
+        {% endfor %}
+      </fieldset>
+      <fieldset class="chips">
+        <legend>Leave out <span class="muted">· none of these</span></legend>
+        {% for g in genres %}
+          <label class="chip-check chip-no"><input type="checkbox" name="no_genre" value="{{ g }}" {% if g in f.no_genres %}checked{% endif %}><span>{{ g }}</span></label>
+        {% endfor %}
+      </fieldset>
+    </details>
     <div class="filter-actions">
-      <button class="btn">{{ 'Roll again' if a else 'Roll' }}</button>
+      <button class="btn">{{ 'Roll again' if has_queue else 'Roll' }}</button>
       <span class="muted small">Scores here are AniList's average, which is usually within a few tenths of MAL's.</span>
     </div>
   </form>
 </details>
 
-{% if a %}
+{% if has_queue %}
+  <div class="roll-bar">
   <p class="muted small roll-summary">
     {% for k in f.kinds %}{{ kinds[k][0] }}{% if not loop.last %}, {% endif %}{% endfor %}
     {%- if f.ep_min or f.ep_max %} · {{ f.ep_label() }}{% endif %}
@@ -71,9 +89,62 @@
     {%- if f.platforms %} · on {{ f.platforms|join(', ') }}{% endif %}
     {%- if f.first_only %} · first seasons{% endif %}
     {%- if f.no_spinoffs %} · no spin-offs{% endif %}
+    {%- if f.no_recaps %} · no recaps{% endif %}
+    {%- if f.genres %} · {{ f.genres|join(' + ') }}{% endif %}
+    {%- if f.no_genres %} · no {{ f.no_genres|join(', ') }}{% endif %}
     {%- if count %} · from {{ '{:,}'.format(count) }}{% if count >= 5000 %}+{% endif %} matching shows{% endif %}
   </p>
+  <nav class="seg" aria-label="Show suggestions">
+    <a href="/random?view=card" {% if view == 'card' %}aria-current="true"{% endif %}>One at a time</a>
+    <a href="/random?view=list" {% if view == 'list' %}aria-current="true"{% endif %}>List</a>
+  </nav>
+  </div>
+{% endif %}
 
+{% macro plan_button(r, e, next) -%}
+  {% if e %}
+    <span class="tag on">{{ STATUSES[e.status] }}{% if e.score is not none %} · {{ e.score|score }}{% endif %}</span>
+  {% elif user %}
+    <form method="post" action="/anime/{{ r.mal_id }}/entry">
+      <input type="hidden" name="status" value="plan">
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn ghost small">+ Plan to watch</button>
+    </form>
+  {% endif %}
+{%- endmacro %}
+
+{% macro score_badge(r) -%}
+  {% if r.mal_score is not none %}<a class="mal-badge" href="{{ r.url }}" target="_blank" rel="noopener" title="MyAnimeList score · open on MyAnimeList">★ {{ r.mal_score|num(2) }}</a>
+  {%- elif anilist_scores.get(r.mal_id) %}<span class="mal-badge alt" title="AniList's average; the MAL score fills in once the show's details are fetched">★ {{ anilist_scores[r.mal_id]|num(1) }} <small>AniList</small></span>
+  {%- else %}<span class="mal-badge">★ –</span>{% endif %}
+{%- endmacro %}
+
+{% if view == 'list' and listed %}
+  <ol class="suggestion-list">
+    {% for r in listed %}
+      <li id="s-{{ r.mal_id }}" class="card sugg-row{% if loop.index0 < seen_upto %} seen{% endif %}">
+        <a href="/anime/{{ r.mal_id }}">{{ m.poster(r) }}</a>
+        <div class="sugg-body">
+          <h3><a href="/anime/{{ r.mal_id }}">{{ title_of(r) }}</a></h3>
+          <p class="meta">
+            {{ r.type or '' }}{% if r.year %} · {{ (r.season or '')|capitalize }} {{ r.year }}{% endif %}
+            {% if r.episodes %} · {{ r.episodes }} eps{% endif %}
+            {% for s in r.studios|genres %} · {{ s }}{% endfor %}
+          </p>
+          <p>{{ score_badge(r) }} {% for g in r.genres|genres %}<span class="tag">{{ g }}</span>{% endfor %}</p>
+          {% if r.synopsis %}<p class="sugg-synopsis">{{ r.synopsis }}</p>{% endif %}
+          {{ m.streaming(r.links) }}
+          <div class="suggestion-actions">
+            <a class="btn ghost small" href="{{ r.url }}" target="_blank" rel="noopener">MyAnimeList ↗</a>
+            <a class="btn ghost small" href="/anime/{{ r.mal_id }}">Details</a>
+            {{ plan_button(r, entries.get(r.mal_id), '/random#s-' ~ r.mal_id) }}
+          </div>
+        </div>
+      </li>
+    {% endfor %}
+  </ol>
+  <form method="post" action="/random/more" class="list-more"><button class="btn">Load more suggestions</button></form>
+{% elif a %}
   <article class="card suggestion reveal" aria-live="polite">
     <a href="/anime/{{ a.mal_id }}">{{ m.poster(a, "big") }}</a>
     <div class="hero-body">
@@ -86,7 +157,7 @@
         {% for s in a.studios|genres %} · {{ s }}{% endfor %}
       </p>
       <p>
-        <span class="mal-badge" title="MyAnimeList score">★ {{ a.mal_score|num(2) }}</span>
+        {{ score_badge(a) }}
         {% for g in a.genres|genres %}<span class="tag">{{ g }}</span>{% endfor %}
       </p>
       {% if a.synopsis %}<p class="suggestion-synopsis">{{ a.synopsis }}</p>{% endif %}
@@ -96,15 +167,8 @@
         {% if has_prev %}<form method="post" action="/random/prev"><button class="btn ghost">← Previous</button></form>{% endif %}
         <form method="post" action="/random/next"><button class="btn">Next suggestion →</button></form>
         <a class="btn ghost" href="/anime/{{ a.mal_id }}">Details &amp; club pick</a>
-        {% if entry %}
-          <span class="tag on">{{ STATUSES[entry.status] }}{% if entry.score is not none %} · {{ entry.score|score }}{% endif %}</span>
-        {% elif user %}
-          <form method="post" action="/anime/{{ a.mal_id }}/entry">
-            <input type="hidden" name="status" value="plan">
-            <input type="hidden" name="next" value="/random">
-            <button class="btn ghost">+ Plan to watch</button>
-          </form>
-        {% endif %}
+        <a class="btn ghost" href="{{ a.url }}" target="_blank" rel="noopener">MyAnimeList ↗</a>
+        {{ plan_button(a, entry, '/random') }}
       </div>
     </div>
   </article>

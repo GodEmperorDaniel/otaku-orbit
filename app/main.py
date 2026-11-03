@@ -285,30 +285,42 @@ def search(request: Request):
 # ---------- random suggestions ----------
 
 @app.get("/random", response_class=HTMLResponse)
-def random_page(request: Request):
+def random_page(request: Request, view: str = ""):
     user = viewer(request)
+    if view in ("card", "list"):
+        request.session["rnd_view"] = view
+    view = request.session.get("rnd_view", "card")
     st = request.session.get("rnd") or {}
     f = suggest.Filters.from_dict(st.get("f"))
     queue, i = st.get("q") or [], st.get("i", 0)
     a = entry = None
-    if 0 <= i < len(queue):
+    listed, entries = [], {}
+    if view == "list" and queue:
+        listed = suggest.rows(queue)
+    elif 0 <= i < len(queue):
         a = suggest.reveal(queue[i])
-        if a is not None and user:
-            with db.conn() as c:
-                entry = c.execute("SELECT * FROM entries WHERE user_id = ? AND mal_id = ?",
-                                  (user["id"], a["mal_id"])).fetchone()
-    return render(request, "random.html", user, f=f, a=a, entry=entry, has_prev=i > 0,
+    shown = [r["mal_id"] for r in listed] or ([a["mal_id"]] if a else [])
+    if user and shown:
+        with db.conn() as c:
+            entries = {e["mal_id"]: e for e in c.execute(
+                f"SELECT * FROM entries WHERE user_id = ? AND mal_id IN ({','.join('?' * len(shown))})",
+                [user["id"], *shown])}
+        entry = entries.get(a["mal_id"]) if a else None
+    return render(request, "random.html", user, f=f, a=a, entry=entry, has_prev=i > 0, view=view,
+                  has_queue=bool(queue), listed=listed, entries=entries, seen_upto=i,
+                  anilist_scores=suggest.anilist_scores,
                   number=st.get("n", 0), count=suggest.match_count(f), sites=suggest.split_sites(),
-                  kinds=suggest.KINDS, skips=suggest.SKIPS, ep_stops=suggest.EP_STOPS)
+                  kinds=suggest.KINDS, skips=suggest.SKIPS, ep_stops=suggest.EP_STOPS, genres=suggest.GENRES)
 
 
 @app.post("/random")
 def random_roll(request: Request, kind: list[str] = Form([]), ep_lo: str = Form(""), ep_hi: str = Form(""),
                 score_min: str = Form(""), score_max: str = Form(""), platform: list[str] = Form([]),
-                skip: str = Form("mine"), first_only: str = Form(""), no_spinoffs: str = Form("")):
+                skip: str = Form("mine"), first_only: str = Form(""), no_spinoffs: str = Form(""),
+                no_recaps: str = Form(""), genre: list[str] = Form([]), no_genre: list[str] = Form([])):
     user = viewer(request)
     f = suggest.Filters.from_form(kind, ep_lo, ep_hi, score_min, score_max, platform, skip, first_only,
-                                  no_spinoffs)
+                                  no_spinoffs, genre, no_genre, no_recaps)
     pages = []
     try:
         queue = suggest.batch(f, user, set(), pages)
@@ -342,6 +354,29 @@ def random_next(request: Request):
         queue, i = queue[drop:] + more, i - drop
     request.session["rnd"] = {**suggest.state_dict(f, queue, i, pages), "n": st.get("n", 0) + 1}
     return redirect("/random")
+
+
+@app.post("/random/more")
+def random_more(request: Request):
+    """List view: add another batch of suggestions to the end of the list."""
+    user = viewer(request)
+    st = request.session.get("rnd")
+    if not st:
+        return redirect("/random")
+    f = suggest.Filters.from_dict(st["f"])
+    queue, i, pages = st["q"], st["i"], st["pages"]
+    try:
+        more = suggest.batch(f, user, set(queue), pages)
+    except sources.SourceError as e:
+        flash(request, f"Couldn't reach AniList for more suggestions ({e}). Try again in a minute.", "error")
+        return redirect("/random")
+    if not more:
+        flash(request, "That's every show matching these filters. Change them to roll again.")
+        return redirect("/random")
+    # The queue lives in the session cookie, so the oldest suggestions make way for new ones.
+    drop = max(0, len(queue) + len(more) - suggest.MAX_QUEUE)
+    request.session["rnd"] = {**st, "q": queue[drop:] + more, "i": max(0, i - drop), "pages": pages}
+    return redirect(f"/random#s-{more[0]}")
 
 
 @app.post("/random/prev")

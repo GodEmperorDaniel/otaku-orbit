@@ -12,7 +12,8 @@
       {% if a.episodes %} · {{ a.episodes }} eps{% endif %}{% if a.status %} · {{ a.status }}{% endif %}
       {% for s in a.studios|genres %} · {{ s }}{% endfor %}
     </p>
-    <p>{% for g in a.genres|genres %}<span class="tag">{{ g }}</span>{% endfor %}</p>
+    <p>{% for g in a.genres|genres %}<span class="tag">{{ g }}</span>{% endfor %}
+      {% if a.url %}<a class="tag mal-link" href="{{ a.url }}" target="_blank" rel="noopener">MyAnimeList ↗</a>{% endif %}</p>
 
     {% if related.prev or related.next %}
       <nav class="series-nav">
@@ -26,7 +27,7 @@
     {% if a.links and a.links != '[]' %}<p class="muted small">From AniList; availability varies by region.</p>{% endif %}
 
     <div class="stat-row">
-      <div class="stat"><span>MyAnimeList</span><b>{{ a.mal_score|num(2) }}</b>
+      <div class="stat"><span>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">MyAnimeList ↗</a>{% else %}MyAnimeList{% endif %}</span><b>{{ a.mal_score|num(2) }}</b>
         <small>{% if a.mal_rank %}#{{ a.mal_rank }} · {% endif %}{{ '{:,}'.format(a.mal_scored_by) if a.mal_scored_by else '' }} votes</small></div>
       <div class="stat"><span>Club avg</span><b>{{ view.mean|num }}</b><small>{{ view.n }} scored</small></div>
       <div class="stat"><span>Spread</span><b>{{ view.sd|num }}</b><small>std. dev.</small></div>

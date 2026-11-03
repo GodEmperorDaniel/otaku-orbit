@@ -18,7 +18,9 @@ from .sources.base import site_name
 PER_PAGE = 25
 MAX_PAGES = 5000 // PER_PAGE  # AniList refuses to page past its first 5,000 matches
 BATCH_PAGES = 3
+MIN_BATCH = 10  # draw more pages when local filtering leaves fewer suggestions than this
 KEEP_BEHIND = 10  # how many past suggestions "Previous" can step back through
+MAX_QUEUE = 200  # suggestions kept for the list view (the queue is stored in the session cookie)
 
 KINDS = {
     "series": ("Series", ["TV", "TV_SHORT", "ONA"]),
@@ -34,6 +36,9 @@ FALLBACK_SITES = [(5, "Crunchyroll"), (10, "Netflix"), (20, "HIDIVE"), (21, "Ama
                   (118, "Disney Plus")]
 # Episode slider positions; the ends mean "no minimum" and "no maximum".
 EP_STOPS = [1, 2, 3, 4, 6, 8, 10, 12, 13, 20, 24, 26, 39, 50, 75, 100, 150, 200, None]
+# AniList's genres (its GenreCollection, minus Hentai, which adult filtering already hides).
+GENRES = ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Horror", "Mahou Shoujo", "Mecha", "Music",
+          "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller"]
 
 
 def _int(v, lo, hi):
@@ -58,12 +63,16 @@ class Filters:
     score_min: float | None = 7.0
     score_max: float | None = None
     platforms: list = field(default_factory=list)
+    genres: list = field(default_factory=list)
+    no_genres: list = field(default_factory=list)
     skip: str = "mine"
     first_only: bool = True
     no_spinoffs: bool = True
+    no_recaps: bool = True
 
     @classmethod
-    def from_form(cls, kinds, ep_lo, ep_hi, score_min, score_max, platforms, skip, first_only, no_spinoffs):
+    def from_form(cls, kinds, ep_lo, ep_hi, score_min, score_max, platforms, skip, first_only, no_spinoffs,
+                  genres=(), no_genres=(), no_recaps=""):
         """ep_lo and ep_hi are slider positions in EP_STOPS."""
         last = len(EP_STOPS) - 1
         lo, hi = sorted([_int(ep_lo, 0, last) or 0, last if _int(ep_hi, 0, last) is None else _int(ep_hi, 0, last)])
@@ -75,9 +84,13 @@ class Filters:
             score_min=_float(score_min, 1, 10),
             score_max=_float(score_max, 1, 10),
             platforms=sorted({p for p in platforms if p in known}),
+            genres=[g for g in GENRES if g in genres],
+            # A genre ticked both ways counts as wanted.
+            no_genres=[g for g in GENRES if g in no_genres and g not in genres],
             skip=skip if skip in SKIPS else "mine",
             first_only=first_only == "1",
             no_spinoffs=no_spinoffs == "1",
+            no_recaps=no_recaps == "1",
         )
         if f.score_min and f.score_max and f.score_min > f.score_max:
             f.score_min, f.score_max = f.score_max, f.score_min
@@ -87,6 +100,8 @@ class Filters:
     def from_dict(cls, d):
         f = cls(**{k: v for k, v in (d or {}).items() if k in cls.__dataclass_fields__})
         f.platforms = [p for p in f.platforms if isinstance(p, str)]  # older sessions stored AniList IDs
+        f.genres = [g for g in f.genres if g in GENRES]
+        f.no_genres = [g for g in f.no_genres if g in GENRES]
         return f
 
     def ep_positions(self):
@@ -114,8 +129,9 @@ class Filters:
         return [fmt for k in self.kinds for fmt in KINDS[k][1]]
 
     def key(self):
-        """What AniList is asked; skipping and first-season filtering happen locally."""
-        return (tuple(self.kinds), self.ep_min, self.ep_max, self.score_min, self.score_max, tuple(self.platforms))
+        """What AniList is asked; skipping and the first-season, spin-off and recap checks happen locally."""
+        return (tuple(self.kinds), self.ep_min, self.ep_max, self.score_min, self.score_max, tuple(self.platforms),
+                tuple(self.genres), tuple(self.no_genres))
 
 
 # Per filter: how many pages of matches there are and how many shows that is, found by probing.
@@ -126,7 +142,7 @@ PROBES = 10  # pages checked per probing request
 
 def _ask(f, pages, light):
     return anilist.discover(sorted(pages), PER_PAGE, f.formats(), f.platform_ids(), f.ep_min, f.ep_max,
-                            f.score_min, f.score_max, light=light)
+                            f.score_min, f.score_max, f.genres, f.no_genres, light=light)
 
 
 def _last_page(f):
@@ -189,21 +205,30 @@ def _skipped(f, user):
         return {r["mal_id"] for r in rows}
 
 
+# AniList's score for each suggestion, shown in the list view until the MAL score is fetched.
+anilist_scores = {}
+
+
 def batch(f, user, exclude, used_pages):
-    """A shuffled list of new suggestion IDs, drawing up to BATCH_PAGES fresh pages (several times if
-    local filtering leaves nothing). Updates used_pages in place. Raises SourceError if AniList is down."""
+    """A shuffled list of new suggestion IDs, drawing BATCH_PAGES fresh pages at a time (up to three times
+    while local filtering leaves fewer than MIN_BATCH). Updates used_pages in place. Raises SourceError if
+    AniList is down."""
     skip = _skipped(f, user) | set(exclude)
+    ids = []
     for _ in range(3):
         drawn = _draw(f, used_pages)
         sources.remember(drawn)
-        ids = list(dict.fromkeys(a["mal_id"] for a in drawn
-                                 if a["mal_id"] not in skip
-                                 and (a["first_season"] or not f.first_only)
-                                 and not (a["spin_off"] and f.no_spinoffs)))
-        if ids or not drawn:
-            random.shuffle(ids)
-            return ids
-    return []
+        anilist_scores.update((a["mal_id"], a["anilist_score"]) for a in drawn)
+        new = [a["mal_id"] for a in drawn
+               if a["mal_id"] not in skip
+               and (a["first_season"] or not f.first_only)
+               and not (a["spin_off"] and f.no_spinoffs)
+               and not (a["recap"] and f.no_recaps)]
+        ids = list(dict.fromkeys(ids + new))
+        if len(ids) >= MIN_BATCH or not drawn:
+            break
+    random.shuffle(ids)
+    return ids
 
 
 def reveal(mal_id):
@@ -250,6 +275,14 @@ def split_sites():
     """(main platforms, the rest) for the filter form."""
     all_sites = sites()
     return [s for s in all_sites if s[0] in MAIN_SITES], [s for s in all_sites if s[0] not in MAIN_SITES]
+
+
+def rows(ids):
+    """Stored rows for a list of suggestions, in order, without fetching anything."""
+    with db.conn() as c:
+        found = {r["mal_id"]: r for r in c.execute(
+            f"SELECT * FROM anime WHERE mal_id IN ({','.join('?' * len(ids))})", ids)}
+    return [found[i] for i in ids if i in found]
 
 
 def state_dict(f, queue, index, pages):

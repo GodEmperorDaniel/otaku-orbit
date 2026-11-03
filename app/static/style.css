@@ -357,7 +357,34 @@ td.actions .linklike { margin-left: 10px; }
 .roll-panel { margin-bottom: 12px; }
 .roll-panel > .filters { margin-top: 10px; }
 .roll-panel .checks select { font-size: .9rem; }
-.roll-summary { margin: 0 0 12px; }
+.roll-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin: 0 0 12px; }
+.roll-summary { margin: 0; flex: 1 1 280px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 99px; padding: 2px; background: var(--surface); }
+.seg a { padding: 4px 12px; border-radius: 99px; font-size: .85rem; color: var(--muted); white-space: nowrap; }
+.seg a:hover { text-decoration: none; color: var(--text); }
+.seg a[aria-current] { background: var(--accent); color: var(--accent-text); }
+.chip-no input:checked + span { background: var(--neg); border-color: var(--neg); color: #fff; text-decoration: line-through; }
+.filters .genre-picker > fieldset + fieldset { margin-top: 10px; }
+a.mal-badge:hover { text-decoration: underline; }
+.mal-badge.alt { color: var(--muted); }
+.mal-badge small { font-weight: 400; font-size: .75rem; }
+.tag.mal-link { color: var(--mal); background: color-mix(in oklab, var(--mal) 14%, var(--surface)); }
+.suggestion-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.sugg-row { display: flex; gap: 18px; align-items: flex-start; padding: 14px; scroll-margin-top: 16px; }
+.sugg-row > a { flex: none; width: 110px; }
+.sugg-row.seen { opacity: .8; }
+.sugg-body { min-width: 0; flex: 1; }
+.sugg-body h3 { margin: 0 0 2px; font-size: 1.15rem; }
+.sugg-body h3 a { color: var(--text); }
+.sugg-body p { margin: 4px 0; }
+.sugg-synopsis { white-space: pre-line; font-size: .92rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sugg-body .suggestion-actions { margin-top: 10px; gap: 8px; }
+.list-more { display: flex; justify-content: center; margin: 16px 0; }
+@media (max-width: 700px) {
+  .sugg-row { gap: 12px; padding: 12px; }
+  .sugg-row > a { width: 72px; }
+  .sugg-synopsis { -webkit-line-clamp: 2; }
+}
 .suggestion { display: flex; gap: 28px; align-items: flex-start; padding: 20px; }
 .suggestion-title { font-size: 1.8rem; margin: 0 0 4px; }
 .suggestion-title a { color: var(--text); }

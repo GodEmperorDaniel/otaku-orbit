@@ -146,12 +146,14 @@ def streaming(mal_id):
 
 
 def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, score_min=None, score_max=None,
-             light=False):
+             genres=(), no_genres=(), light=False):
     """Several pages of released shows matching the random-picker filters, most popular first, in one request.
 
     Returns {page: (records, has_next, raw_count)}. With light=True, records are just MAL IDs (for finding
     where the matches end); otherwise each record gets "first_season": False when it has a prequel, and
-    "spin_off": True when it links to a parent anime (spin-offs and side stories do; main series don't).
+    "spin_off": True when it links to a parent anime (spin-offs and side stories do; main series don't),
+    "recap": True for a movie, OVA or special that retells an earlier series (see _is_recap), and
+    "anilist_score" on a 1–10 scale. Shows must have every genre in genres and none in no_genres.
     AniList won't page past its first 5,000 matches, so the pool is the 5,000 most popular."""
     decl = ["$perPage: Int", "$formats: [MediaFormat]"]
     filters = ["format_in: $formats", "status_not: NOT_YET_RELEASED", "sort: POPULARITY_DESC"]
@@ -163,12 +165,15 @@ def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, s
         ("epMax", "episodes_lesser", "Int", ep_max + 1 if ep_max else None),
         ("scoreMin", "averageScore_greater", "Int", round(score_min * 10) - 1 if score_min else None),
         ("scoreMax", "averageScore_lesser", "Int", round(score_max * 10) + 1 if score_max else None),
+        ("genres", "genre_in", "[String]", list(genres) or None),
+        ("noGenres", "genre_not_in", "[String]", list(no_genres) or None),
     ]:
         if value is not None:
             decl.append(f"${name}: {kind}")
             filters.append(f"{gql}: ${name}")
             variables[name] = value
-    fields = "idMal" if light else f"{MEDIA} {LINKS} relations {{ edges {{ relationType node {{ type }} }} }}"
+    fields = "idMal" if light else (f"{MEDIA} {LINKS} averageScore "
+                                    "relations { edges { relationType node { type format startDate { year month } } } }")
     blocks = "\n".join(
         f"p{n}: Page(page: {n}, perPage: $perPage) {{ pageInfo {{ hasNextPage }} "
         f"media(type: ANIME, isAdult: $adult, {', '.join(filters)}) {{ {fields} }} }}"
@@ -184,14 +189,32 @@ def discover(pages, per_page, formats, platforms=(), ep_min=None, ep_max=None, s
             if light:
                 items.append(m["idMal"])
                 continue
-            edges = (m.pop("relations") or {}).get("edges") or []
+            edges = [e for e in (m.pop("relations") or {}).get("edges") or []
+                     if (e.get("node") or {}).get("type") == "ANIME"]
             a = normalize(m)
-            related = {e.get("relationType") for e in edges if (e.get("node") or {}).get("type") == "ANIME"}
+            related = {e.get("relationType") for e in edges}
             a["first_season"] = "PREQUEL" not in related
             a["spin_off"] = "PARENT" in related
+            a["recap"] = _is_recap(m, edges)
+            a["anilist_score"] = m["averageScore"] / 10 if m.get("averageScore") else None
             items.append(a)
         out[n] = (items, page["pageInfo"]["hasNextPage"], len(page["media"]))
     return out
+
+
+def _is_recap(m, edges):
+    """Recap and compilation movies (and OVAs and specials) are linked to the series they retell as an
+    "alternative version", and come out after it. Original films with a later TV adaptation (Little Witch
+    Academia, Death Billiards) and TV remakes (Brotherhood, Fruits Basket 2019) don't count."""
+    if m.get("format") not in ("MOVIE", "OVA", "SPECIAL"):
+        return False
+
+    def start(x):
+        d = x.get("startDate") or {}
+        return (d.get("year") or 9999, d.get("month") or 13)
+
+    return any(e.get("relationType") == "ALTERNATIVE" and e["node"].get("format") in ("TV", "TV_SHORT", "ONA")
+               and start(e["node"]) < start(m) for e in edges)
 
 
 def streaming_sites():
